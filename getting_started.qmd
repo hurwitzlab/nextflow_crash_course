@@ -1,0 +1,157 @@
+---
+title: "Getting Started on Hazel"
+author:
+  - name: "Seth Weaver"
+    affiliations:
+      - name: "Bioinformatics Research Center"
+        url: "https://brc.ncsu.edu/"
+date: today
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    code-copy: true
+    code-overflow: wrap
+    include-in-header:
+      text: |
+        <style>
+        @media print {
+          pre, code, .callout {
+            break-inside: avoid;
+          }
+        }
+        </style>
+---
+
+## Account Setup
+
+1. Request access from your PI or supervisor
+2. Read and understand the [Acceptable Use Policy](https://hpc.ncsu.edu/About/AUP.php)
+3. Obtain your UnityID and ensure VPN access if working off-campus
+
+## Logging In
+
+There are multiple ways to log onto **Hazel**:
+
+**Web browser (OnDemand):** <https://servood.hpc.ncsu.edu>
+
+1. Select NC State University from the drop down menu
+2. Once logged on, use the tabs at the top to access files, submit jobs, use apps, etc.
+
+
+To open up a terminal session, use the **clusters** tab and select `>_ Hazel Cluster Shell Access`
+
+::: {.callout-note}
+Using OnDemand may be especially useful if you have a windows machine, as terminal access may be challenging based on your setup.
+:::
+
+**Terminal (SSH):**
+```bash
+$ ssh [UnityID]@login.hpc.ncsu.edu
+```
+
+To enable GUI applications via X11 forwarding (macOS requires [XQuartz](https://www.xquartz.org)):
+```bash
+$ ssh -X [UnityID]@login.hpc.ncsu.edu
+```
+
+**VS Code:**
+
+While accessing Hazel through VS Code is possible, we recommend using either **OnDemand** or via **SSH** as these option are more user-friendly.
+
+See the [HPC VSCode guide](https://hpc.ncsu.edu/Documents/LoginUsingVSCode.php)
+
+## Your Spaces on Hazel
+
+Once logged in, you have access to several distinct file locations. Each is sized and tuned for a different stage of your work — using the right one keeps your jobs fast and your group's quota healthy.
+
+::: {.callout-note}
+You may notice below that some words below have a dollar sign in front of them. These represent `varibles`. When code is executed these placeholder variables will be replaced with the real data that they represent. For example `$USER` will be replaced with your `unityid`. You can confirm this by typing in the terminal `echo $USER` and pressing `enter`. Read more about variables in the [Tour of Hazel](tour_of_hazel.qmd).
+:::
+
+| Location | Path | Quota | Best for |
+|----------|------|-------|----------|
+| Home | `/home/$USER` | 1 GB/user | Shell config, small scripts, SSH keys |
+| Scratch | `/share/$GROUP/$USER` | 20 TB/group | Active job working directory and pipeline intermediates |
+| Applications | `/usr/local/usrapps/$GROUP` | Varies | Conda environments, containers, shared software |
+| RS1 | `/rs1/researchers/...` | 40 TB/project | Raw data, final results, anything you need to keep |
+
+### Home (`/home/$USER`)
+
+Your personal landing spot when you log in. The 1 GB quota is small on purpose — home is for **configuration**, not data. Keep your `.bashrc`, SSH keys, and a handful of small scripts here. Don't run jobs out of home or write large outputs to it; you will fill the quota and your shell will start failing in confusing ways.
+
+### Scratch (`/share/$GROUP/$USER`)
+
+Your **working directory for active jobs**. Scratch is fast, large, and shared with your group. Submit jobs from here, write intermediate files here, and use it for anything you can regenerate.
+
+::: {.callout-warning}
+Files on scratch are **automatically deleted after 30 days**. Never leave anything on scratch that you can't reproduce — copy results you want to keep back to **RS1** as soon as the job finishes.
+:::
+
+### Applications (`/usr/local/usrapps/$GROUP`)
+
+Where your group installs **shared software**: conda environments, Apptainer containers, custom builds. Anyone in the group can load these in their job scripts, so you don't each need your own copy.
+
+::: {.callout-note}
+Applications storage is **read-only from compute nodes**. Install or update software from a login node; jobs can only read from it.
+:::
+
+### RS1 (`/rs1/researchers/...`)
+
+**Long-term project storage.** RS1 is where raw data lives and where final results go to rest. It's slower than scratch but durable and not auto-deleted. Treat it as the canonical home for anything you'd be upset to lose.
+
+::: {.callout-tip}
+**Recommended workflow:** Keep raw inputs in RS1 → stage them into scratch and run jobs there → copy final outputs back to RS1 → let scratch's 30-day cleanup handle the intermediates.
+:::
+
+## Useful Commands
+
+### System and User Info
+
+```bash
+$ sinfo                          # available partitions and nodes
+$ groups                         # groups you belong to
+$ hostname                       # which node you are on
+```
+
+### Storage
+
+```bash
+$ du -sh .                       # size of current directory
+$ du -sh /path/to/dir/*          # size of each item in a directory
+$ quota                          # home directory usage
+$ quota -s -g [group_name]       # group quota
+$ ls -lrt                        # list files by modification time (newest last)
+```
+
+### Software
+
+```bash
+$ module avail                   # list available modules
+$ module load [name]             # load a module
+$ which [executable]             # path to an executable
+```
+
+## First Week Checklist
+
+**Before you start:**
+
+- [ ] Obtain UnityID and VPN access
+- [ ] Join your research group's allocation/project space
+- [ ] Review the Acceptable Use Policy
+
+**Getting connected:**
+
+- [ ] SSH into a login node: `ssh [UnityID]@login.hpc.ncsu.edu`
+- [ ] Check your home directory quota: `quota`
+- [ ] Locate your group's scratch space: `/share/$GROUP/$USER`
+- [ ] Find your group's RS1 storage: `/rs1/researchers/...`
+
+## Resources
+
+- [Getting started on Hazel](https://hpc.ncsu.edu/Documents/GetStarted.php)
+- [Cluster status](https://hpc.ncsu.edu/Monitor/ClusterStatusMemory.php)
+- [OIT HPC YouTube channel](https://www.youtube.com/@OITHPC)
+- HPC announcements: join the **HPC Announcements Google Group**

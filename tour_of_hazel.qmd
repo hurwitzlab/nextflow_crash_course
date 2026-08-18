@@ -1,0 +1,431 @@
+---
+title: "Tour Of Hazel"
+author:
+  - name: "Seth Weaver"
+    affiliations:
+      - name: "Bioinformatics Research Center"
+        url: "https://brc.ncsu.edu/"
+date: today
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    code-copy: true
+    code-overflow: wrap
+    include-in-header:
+      text: |
+        <style>
+        @media print {
+          pre, code, .callout {
+            break-inside: avoid;
+          }
+        }
+        </style>
+---
+
+Welcome to the Tour of Hazel! In this hands-on workshop we will accomplish two main goals:
+
+1. **Navigate Hazel** — walk through the HPC cluster's layout and understand which storage spaces are appropriate for which computing tasks.
+2. **Learn UNIX** — pick up just enough shell commands to move around, manage files, and feel at home on the command line.
+
+Use this guided walk through. When you see a command block that starts with a `$`, that is a command that you should type. Lines below that command (without a `$`) are the expected output of that command.
+
+---
+
+# Getting Your Bearings
+
+You have just logged in to Hazel, you likely see a log-on message. **The first step is to find out where you are.**
+
+## Where are you?
+
+Use the `pwd` command — **p**rint **w**orking **d**irectory — to print the full path of your current location.
+
+```bash
+$ pwd
+/home/sdweave2
+```
+
+You should see something like what's shown above, except with your unity ID. Your unity ID is your username on hazel. You can always confirm your identity with:
+
+```bash
+$ echo $USER
+sdweave2
+```
+
+::: {.callout-tip}
+## Concept: Variables
+The `$` sign tells the shell to expand whatever follows it into its underlying value. `$USER` is a **variable** that the system pre-loads with your username. Try typing `echo USER` without the `$` and notice the difference — the shell just prints the word `USER` instead of your name.
+:::
+
+::: {.callout-tip}
+## Concept: Paths
+A **path** is the address of a file or directory on the filesystem. Paths that begin with `/` are **absolute** — they describe a location starting from the very top of the filesystem (called the *root*). The path `/home/sdweave2` means: start at root (`/`), go into `home`, then go into `sdweave2`. You will see and type a lot of paths today.
+:::
+
+---
+
+# Navigating Hazel's Storage Spaces
+
+Hazel has several distinct storage areas, each designed for different purposes. Here we will learn what different filesystems exist on Hazel and how to navigate to them.
+
+### Home directory
+You are currently in your home directory (`/home/<unity_id>`). This is a small, personal directory that only has 1 Gb of storage. It is good for small files which can configure option on the cluster, but is not suitable for datasets
+
+:::{.callout-tip}
+A shortcut for `/home/<unity-id>` is the `~` character.
+:::
+
+### Scratch Space
+
+Every research group on Hazel has a **scratch directory** — fast, temporary storage meant for active compute jobs. To find yours, you first need to know what group you belong to:
+
+```bash
+$ echo $GROUP
+brc
+```
+
+This prints your primary group name (e.g., `brc`). Now use that to navigate to your group's scratch space:
+
+To **c**hange **d**irectories, use the `cd` command followed with the **path** to a directory.
+
+```bash
+cd /share/$GROUP/$USER
+```
+
+Once you are there, run `pwd` again:
+
+```bash
+$ pwd
+/share/brc/sdweave2
+```
+
+Notice how the path is completely different from `/home/...`. You are now in a totally different part of the filesystem.
+
+::: {.callout-important}
+## Scratch space is temporary
+Files in `/share/` are **not backed up** and are subject to purge policies. Use scratch for job inputs/outputs while a job is running — not for long-term storage.
+:::
+
+::: {.callout-caution}
+## New users: no group yet?
+If `echo $GROUP` returns nothing, or you get a "No such file or directory" error when changing to `/share/...`, you may not yet be assigned to a group. For the rest of this workshop, use your home directory (`cd ~`) instead.
+:::
+
+### Research Storage (`/rs1/`)
+
+A third filesystem that you can navigate to is **Research Storage**. This is for long-term, backed-up storage of datasets and project files, Hazel offers research storage mounted at `/rs1/`. These spaces are generally tied to specific projects that your PI has.
+
+Generally, your the path to your **rs1** space will be: `/rs1/researchers/<first-letter>/<PI-unity-id>`. So if my PI is John Doe, the path may be: `/rs1/researchers/j/jdoe1`. Ask your PI for the path to your **Research Storage** drive.
+
+If you know the path, navigate there with `cd`!
+
+:::{.callout-note}
+Unlike scratch, `/rs1/` is backed up and suitable for archiving important results.
+:::
+
+
+## Summary: Hazel's storage spaces
+
+| Location | Purpose | Backed up? |
+|---|---|---|
+| `/home/<unity_id>` | Personal config, small scripts | Yes |
+| `/share/<group>/<unity_id>` | Active compute jobs | No |
+| `/rs1/<group>/` | Long-term project data | Yes |
+
+---
+
+# Working with Files
+
+Now that we know where we can go on Hazel, it's time to start learning how to work on Hazel. Essential UNIX knowledge is how to create, move, copy, and delete files. We will practice those concepts now.
+
+Navigate to your **scratch** directory (or **home** directory if scratch is not available) before continuing.
+
+```bash
+$ cd /share/$GROUP/$USER
+# or, if needed:
+$ cd ~
+```
+
+Confirm where you are:
+
+```bash
+$ pwd
+/share/brc/sdweave2
+```
+
+## How do I manipulate files and directories?
+
+### Create a directory
+
+The first thing we will do is create a new directory for us to work in. Use `mkdir` to make a new directory:
+
+```bash
+$ mkdir new_dir
+```
+
+Verify it was created with `ls` — which will **list** the contents of the current directory
+
+```bash
+$ ls
+new_dir
+```
+
+You should see `new_dir` listed, the blue color which you will see in the terminal indicates that it is a **directory**, not a **file**.
+
+### Create a file with a text editor
+
+Hazel has several text editors available. Today, we will use **nano**, which is the most beginner-friendly. Type `nano` then the name of the file you want to create.
+
+```bash
+$ nano file.txt
+```
+
+You are now inside the nano editor. Type a few lines of text — anything you like. Perhaps: `I'm creating a file!` When you are done:
+
+- Press `Ctrl+O` then `Enter` to **save** the file
+- Press `Ctrl+X` to **exit**
+
+::: {.callout-tip}
+## Text editor options
+`nano` is great for beginners. As you grow more comfortable, you may encounter `vim` on HPC systems — powerful but with a steeper learning curve. `nano` is always a safe choice for quick edits.
+:::
+
+### View a file's contents
+
+Let's verify that the file we just made contains the text we wrote. We can use `cat`, short for **concatenate** to print a file's content to the terminal. Type `cat` then the name of the file.
+
+```bash
+$ cat file.txt
+I'm creating a file!
+```
+
+You should see the text you just typed.
+
+### List files again — and notice something
+
+Run `ls` again:
+
+```bash
+$ ls
+file.txt new_dir
+```
+
+You can see `file.txt` and `new_dir`. But what if you wanted `file.txt` to be *inside* `new_dir`?
+
+### Move a file
+
+To **move** a file to a new directory, use the `mv` command. Type `mv`, the name of the **file** and the name of the **directory** where the file will go:
+
+```bash
+$ mv file.txt new_dir/
+```
+
+Navigate into the directory and confirm it arrived:
+
+```bash
+$ cd new_dir
+$ pwd
+/share/<group>/<user>/new_dir
+$ ls
+file.txt
+```
+
+:::{.callout-tip}
+`mv` can also be used to **rename** files. Type `mv` the current file name, then the new name. Example: `mv file.txt new_name.txt`. This will delete `file.txt` and now `new_name.txt` will contain its content.
+:::
+
+### Copy a file
+
+Another core concept is **copying** files. This is done with the `cp` command. Type `cp` the name of the original file, then the name of the new file.
+
+Make two copies of the file that we created earlier:
+
+```bash
+$ cp file.txt file2.txt
+$ cp file.txt file3
+```
+
+Now run `ls` — you should see three all 3 files:
+
+```bash
+$ ls
+file2.txt file3 file.txt
+```
+
+## Wildcards
+
+The `*` character is a **wildcard** that matches any sequence of characters. Use it with `ls`:
+
+```bash
+$ ls *.txt
+file2.txt file.txt
+```
+
+As you can see, this lists only `file.txt` and `file2.txt`, skipping `file3` because it has no `.txt` extension.
+
+::: {.callout-tip}
+## Concept: Wildcards
+Any command that accepts a filename can accept a **wildcard pattern**. `*.txt` means "anything that ends in `.txt`". Similarly, `file*` means "anything that starts with `file`". Wildcards can be used to quickly move, list, or delete many files at once.
+:::
+
+### Delete a file
+
+The final important concept for this section: deleting files. Use `rm` followed by a **filename**
+to **remove** that file. Practice this by removing `file3`
+
+```bash
+$ rm file3
+```
+
+Run `ls` to confirm it is gone.
+
+::: {.callout-warning}
+## There is no trash can
+`rm` is **permanent and immediate**. There is no undo, no recycle bin, no "are you sure?" prompt. Once a file is removed, it is gone. Be deliberate before pressing Enter on any `rm` command.
+:::
+
+# Scripts: Automation of commands
+
+So far, every command you have typed has been **interactive** — you ran it once, saw the result, and moved on. A **script** is a plain text file that contains a list of commands the shell runs for you, in order, all at once. Scripts are how you turn a series of manual steps into something repeatable and shareable.
+
+## Your first script
+
+Make sure you are in your scratch (or home) directory:
+
+```bash
+$ cd /share/$GROUP/$USER
+```
+
+Create a new file called `hello.sh`. The `.sh` extension is a convention that signals "this is a shell script."
+
+```bash
+$ nano hello.sh
+```
+
+Type the following inside the editor:
+
+```bash
+#!/bin/bash
+echo "Hello, $USER!"
+```
+
+::: {.callout-tip}
+## The shebang line
+The very first line, `#!/bin/bash`, is called a **shebang**. It tells the operating system which program should interpret the script — in this case, `/bin/bash`. Always include it as the first line of your shell scripts.
+:::
+
+Save and exit (`Ctrl+O`, `Enter`, `Ctrl+X`).
+
+
+Now run the script by using `./` and the name of the script:
+
+```bash
+$ ./hello.sh
+-bash: ./hello.sh: Permission denied
+```
+
+Oops! We got a **permission denied** error. This is becuase we forgot to tell the shell that `hello.sh` is an **executable** file. To do so, we must use the `chmod` command to **ch**ange the **mod**e of the file. The `+x` in front of the filename tells the shell that we want to make the file executable.
+
+
+```bash
+$ chmod +x hello.sh
+```
+::: {.callout-tip}
+Now if you run `ls`, you should see that `hello.sh` is in green text, a quick indication that the file is executable.
+:::
+
+
+Now try to run the script again:
+
+```bash
+$ ./hello.sh
+Hello, sdweave2!
+```
+
+## Expanding the script
+
+Open `hello.sh` again and replace the contents with a script that puts several of the commands you previously learned to work:
+
+```bash
+$ nano hello.sh
+```
+
+```bash
+#!/bin/bash
+PROJECT="my_project"
+
+echo "Setting up workspace: $PROJECT"
+mkdir $PROJECT
+
+echo "Project: $PROJECT" > $PROJECT/notes.txt
+cp $PROJECT/notes.txt $PROJECT/notes_backup.txt
+
+echo "Files created:"
+ls $PROJECT
+
+echo "Contents of notes.txt:"
+cat $PROJECT/notes.txt
+```
+
+
+::: {.callout-tip}
+## Concept: User-defined variables
+Define your own variables with the syntax `NAME="value"` — no spaces around the `=`. Expand them anywhere in the script with `$NAME`, just like system variables such as `$USER`. Changing `PROJECT="my_project"` to any other name would ripple through every command in the script automatically.
+:::
+
+Save, exit, and run it:
+
+```bash
+$ ./hello.sh
+Setting up workspace: my_project
+Files created:
+notes_backup.txt  notes.txt
+Contents of notes.txt:
+Project: my_project
+```
+
+In a handful of lines, the script created a directory, wrote a file, copied it, and reported back — the same steps you would have typed one at a time, now automated.
+
+Use the commands `ls`, `cd`, `cat`, and others to explore fully what your script has created!
+
+::: {.callout-tip}
+## Concept: Output redirection
+The `>` operator **redirects** the output of a command into a file instead of printing it to the terminal. `echo "Project: $PROJECT" > $PROJECT/notes.txt` writes that line directly into `notes.txt`. If the file does not exist it is created; if it does, it is overwritten.
+:::
+
+---
+
+# Command Reference
+
+Here is a quick reference for every command covered today.
+
+| Command | What it does | Example |
+|---|---|---|
+| `pwd` | Print current directory path | `pwd` |
+| `cd` | Change directory | `cd /share/$GROUP/$USER` |
+| `ls` | List directory contents | `ls *.txt` |
+| `mkdir` | Make a new directory | `mkdir new_dir` |
+| `nano` | Open a text editor | `nano file.txt` |
+| `cat` | Print a file to the terminal | `cat file.txt` |
+| `mv` | Move or rename a file | `mv file.txt new_dir/` |
+| `cp` | Copy a file | `cp file.txt file2.txt` |
+| `rm` | Delete a file (permanent!) | `rm file3` |
+| `echo` | Print text or expand a variable | `echo $USER` |
+| `>` | Redirect output into a file (overwrites) | `echo "text" > file.txt` |
+| `chmod` | Change file permissions | `chmod +x hello.sh` |
+
+---
+
+# Key Concepts
+
+Five ideas that underpin everything you did today.
+
+| Concept | What it means | Quick example |
+|---|---|---|
+| **Variables** | A named placeholder the shell expands when prefixed with `$`. System variables like `$USER` and `$GROUP` are pre-set; define your own with `NAME="value"` (no spaces around `=`). | `echo $USER` → prints your username |
+| **Paths** | The address of a file or directory on the filesystem. Absolute paths start with `/` (root); `~` is shorthand for your home directory. | `/home/sdweave2`, `~`, `/share/brc/sdweave2` |
+| **Wildcards** | The `*` character matches any sequence of characters. Any command that accepts filenames also accepts wildcard patterns to act on many files at once. | `ls *.txt` lists only `.txt` files |
+| **Text editors** | Programs for creating and editing plain-text files in the terminal. `nano` is beginner-friendly: `Ctrl+O` saves, `Ctrl+X` exits. | `nano file.txt` |
+| **Scripts** | A plain-text `.sh` file containing a sequence of shell commands, run all at once. Start with `#!/bin/bash`, make executable with `chmod +x`, then run with `./script.sh`. | `./hello.sh` |
