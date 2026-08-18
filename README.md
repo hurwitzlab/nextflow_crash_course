@@ -2,6 +2,10 @@
 
 A series of hands-on workshops introducing pipeline development and execution with [Nextflow](https://www.nextflow.io/).
 
+
+## Course website
+https://hurwitzlab.github.io/nextflow_crash_course/
+
 ## Workshops
 
 **Day 0 (optional, self-paced):**
@@ -12,8 +16,7 @@ A series of hands-on workshops introducing pipeline development and execution wi
      
 **Day 1 and 2:** TBD
 
-## Course website
-https://hurwitzlab.github.io/nextflow_crash_course/
+
 
 ## Provide Feedback!
 <!-- TODO: add anonymous feedback form link, e.g.:
