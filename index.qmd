@@ -16,14 +16,18 @@ format:
 
 Welcome to the Nextflow Crash Course — a series of hands-on workshops introducing pipeline development and execution with [Nextflow](https://www.nextflow.io/).
 
-## Workshops
+## Day 0: Intro to HPC / Command line (Optional)
+Self-paced, to be completed before the workshop. Intended to get participants up to speed on the high-perfomance computing (HPC) environments.
 
-### [Intro to Nextflow](intro_to_nextflow.html)
+### [Logging onto Hazel HPC](intro_to_nextflow.html)
+How to log on the the NC State HPC Cluster (Hazel)
 
-<!-- TODO: one or two sentence summary of what this workshop covers. -->
+### [Tour of Hazel / Command line 101]()
+
+### [Using shared oftware on Hazel]()
+
+## Day 1 and 2 qmd docs go here however you best want to organize them
 
 ### Additional Resources
 
-<!-- TODO: add links to related handbooks, docs, or follow-on material, e.g.:
 1. [COS Compute Handbook](https://hurwitzlab.github.io/COS_Compute_Handbook/)
--->
