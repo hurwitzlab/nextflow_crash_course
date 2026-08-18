@@ -79,6 +79,7 @@ To use software modules in job that you submit to slurm, place the `module load`
 The `module use` command must be run every time you log onto hazel for the BRC modules to be available. You can edit your `.bashrc` profile to automatically run `module use` upon start up.
 :::
 
+#### test
 In most cases, when you load a BRC module, you are actually running that software inside a container. Therefore, you may experience **bind path** issues if you reference data that is not in your current directory. If this is an issue, you will often see an error telling you files don't exist (e.g. `[E::hts_open] fail to open file`). See the **Bind paths and file visibility** section below for more information.
 
 ### Using apptainer

@@ -8,7 +8,3 @@ website:
     left:
       - href: index.qmd
         text: Home
-      - href: loading_brc_modules.qmd
-        text: Loading BRC Modules
-      - href: nf_core_pipelines.qmd
-        text: nf-core Pipelines
