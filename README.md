@@ -1,4 +1,4 @@
-# Nextflow Crash Course
+# The NCSU-BRC: "From ‘Hello Nextflow’ to Your First Pipeline"
 
 A series of hands-on workshops introducing pipeline development and execution with [Nextflow](https://www.nextflow.io/).
 
