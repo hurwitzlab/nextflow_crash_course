@@ -117,7 +117,7 @@ Containers have their own isolated filesystem, so a program running inside one c
 By default, without any `--bind` flags, Apptainer automatically makes the following visible inside the container:
 
 - your home directory (`$HOME`)
-- the directory you run the command from (`$PWD`)
+- the directory you load a BRC module or the **apptainer** module from (`$PWD`)
 - `/tmp`, `/proc`, `/sys`, `/dev`
 
 If the files you're working with live under one of those paths, everything works with no extra steps. If they live somewhere else — for example a scratch or RS1 path that isn't part of your current working directory tree — you have a few options:
@@ -130,7 +130,7 @@ If the files you're working with live under one of those paths, everything works
   ```
   This will recursively bind all directories within `/rs1` and within your group's **scratch** directory.
 
-  Add this to your `~/.bashrc` to make this a permanent fix. The value is a comma-separated list of `src[:dest[:opts]]` entries, same syntax as `--bind`.
+  Add this to your `~/.bashrc` to make this a permanent fix. The value is a comma-separated list of directory entries, with the same syntax as `--bind`.
 
 3. **Bind the path explicitly for a single command** if you're calling `apptainer exec` yourself instead of going through a `module load` wrapper:
 
