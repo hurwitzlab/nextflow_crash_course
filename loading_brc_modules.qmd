@@ -79,8 +79,8 @@ To use software modules in job that you submit to slurm, place the `module load`
 The `module use` command must be run every time you log onto hazel for the BRC modules to be available. You can edit your `.bashrc` profile to automatically run `module use` upon start up.
 :::
 
-#### test
-In most cases, when you load a BRC module, you are actually running that software inside a container. Therefore, you may experience **bind path** issues if you reference data that is not in your current directory. If this is an issue, you will often see an error telling you files don't exist (e.g. `[E::hts_open] fail to open file`). See the **Bind paths and file visibility** section below for more information.
+#### Containerized modules
+Most BRC modules exist as containers, meaning the programs run inside isolated container environments. Since containers are isolated, data directories on hazel must be **bound** to the container. Some directories are bound by default, but not all. See the **Bind paths and file visibility** section below for more information.
 
 ### Using apptainer
 
@@ -112,7 +112,7 @@ Both options for loading and using BRC software are compatible with bash scripts
 
 ### Bind paths and file visibility
 
-Containers have their own isolated filesystem, so a program running inside one can only see host directories that have been "bound" (mounted) into it. A plain `apptainer exec` call adds no extra bind paths on its own — it relies entirely on Apptainer's default bind behavior. (You may notice an `Optional bind path (set BIND_PATH in your profile to enable)` comment in the module files; this is currently a placeholder and has no effect.)
+Containers have their own isolated filesystem, so a program running inside one can only see host directories that have been "bound" (mounted) into it. A plain `apptainer exec` call adds no extra bind paths on its own — it relies entirely on Apptainer's default bind behavior.
 
 By default, without any `--bind` flags, Apptainer automatically makes the following visible inside the container:
 
@@ -120,49 +120,36 @@ By default, without any `--bind` flags, Apptainer automatically makes the follow
 - the directory you run the command from (`$PWD`)
 - `/tmp`, `/proc`, `/sys`, `/dev`
 
-The `module load` wrapper scripts add one more binding on top of that: every BRC tool module depends on the `singularity`/`apptainer` module, and that module's modulefile runs `prepend-path APPTAINER_BINDPATH $env(PWD),` when loaded. In practice this just re-asserts whatever directory you were in *at the moment you ran `module load`* — it does not track your directory afterward, and it is not scratch- or RS1-specific despite often looking that way if you happen to load modules from your scratch directory.
+If the files you're working with live under one of those paths, everything works with no extra steps. If they live somewhere else — for example a scratch or RS1 path that isn't part of your current working directory tree — you have a few options:
 
-If the files you're working with (SAM/BAM files, reference genomes, etc.) live under one of those paths, everything works with no extra steps. If they live somewhere else — for example a scratch or RS1 path that isn't part of your current working directory tree — you have a few options:
+1. **Load the module in the directory you want to work from**, then refer to them with relative paths. Since `$PWD` is auto-bound when you load a module, this is the simplest fix for a one-off command.
+2. **Set the `APPTAINER_BINDPATH` environment variable.** Apptainer reads this variable automatically and applies it to every `exec`/`run`/`shell` call — including the ones inside the BRC `module load` wrapper scripts. This is the recommended fix if you regularly work with data that spans multiple locations on hazel, because it's a one-time setup that then applies to *every* BRC module:
 
-1. **`cd` into the directory containing your files first**, then refer to them with relative paths. Since `$PWD` is auto-bound (both by Apptainer itself and by the `singularity`/`apptainer` module, per above), this is the simplest fix for a one-off command.
-2. **Set the `APPTAINER_BINDPATH` environment variable.** Apptainer reads this variable automatically and applies it to every `exec`/`run`/`shell` call — including the ones inside the BRC `module load` wrapper scripts. This is the recommended fix if you regularly work with data outside your home directory, because it's a one-time setup that then applies to *every* BRC module:
+  ```bash
+  $ export APPTAINER_BINDPATH="/rs1,/share/$GROUP"
+  ```
+  This will recursively bind all directories within `/rs1` and within your group's **scratch** directory.
 
-    ```bash
-    $ export APPTAINER_BINDPATH="/rs1,/share/$GROUP"
-    ```
-
-    Add this to your `~/.bashrc` to make it permanent. The value is a comma-separated list of `src[:dest[:opts]]` entries, same syntax as `--bind`.
-
-::: {.callout-tip}
-Bind at the group level (`/share/$GROUP`) rather than your own subdirectory (`/share/$GROUP/$USER`). Because the `singularity`/`apptainer` module also auto-binds `$PWD` (see above), if your own `APPTAINER_BINDPATH` entry is the *exact* directory you're sitting in when you load a module, Apptainer sees the same destination bound twice and prints a harmless but noisy warning:
-
-```
-WARNING: While bind mounting '/share/brc/sdweave2:/share/brc/sdweave2': destination is already in the mount point list
-```
-
-Binding the group root instead of your personal scratch directory still gives you access to everything under your own directory (permissions are unaffected — you see exactly what you could already see outside the container), but it's a different literal path than the one you're likely to actually `cd` into and load a module from, so the two bind entries stop colliding. The same logic applies to RS1: binding `/rs1` broadly avoids collisions with whatever project subdirectory you happen to be working in.
-:::
+  Add this to your `~/.bashrc` to make this a permanent fix. The value is a comma-separated list of `src[:dest[:opts]]` entries, same syntax as `--bind`.
 
 3. **Bind the path explicitly for a single command** if you're calling `apptainer exec` yourself instead of going through a `module load` wrapper:
 
     ```bash
-    $ apptainer exec --bind /path/to/data/dir /usr/local/usrapps/brc/brc_modules/images/<image>.sif samtools view ...
+    SAMTOOLS_SIF="/usr/local/usrapps/brc/brc_modules/images/quay.io_biocontainers_samtools:1.24--h9dcdb79_1.sif"
+    $ apptainer exec --bind /path/to/data/dir $SAMTOOLS_SIF samtools view /path/to/data/dir/input.sam
     ```
+    This will bind whatever directory you pass to the `--bind` option, usefull for when your data is in a separate filesystem.
 
 ::: {.callout-tip}
 If a tool reports that a file doesn't exist even though you can see it fine on the host filesystem (e.g. `[E::hts_open] fail to open file`), this is almost always a missing bind mount, not a typo in the path.
 :::
 
-::: {.callout-note}
-The `Optional bind path (set BIND_PATH in your profile to enable)` comment you may see in the module files is currently a placeholder with no effect — use `APPTAINER_BINDPATH` above instead.
-:::
-
 ## Requesting software
 
-Perhaps you want to use a software package that is missing from the BRC library, or need a package updated to a newer version. Contact the BRC at ncstate_brc@ncsu.edu with:
+If you want to use a software package that is missing from the BRC library, or need a package updated to a newer version. Contact the BRC at ncstate_brc@ncsu.edu or sdweave2@ncsu.edu with:
 
 1. Software package name
-2. Link to software package
+2. Link to software package (Github page or usage manual)
 3. Specific software version (if applicable)
 
 ::: {.callout-note}
