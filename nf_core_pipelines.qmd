@@ -1,0 +1,107 @@
+---
+title: "nf-core Pipelines"
+author:
+  - name: "Seth Weaver"
+    affiliations:
+      - name: "Bioinformatics Research Center"
+        url: "https://brc.ncsu.edu/"
+date: today
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    code-copy: true
+    code-overflow: wrap
+    include-in-header:
+      text: |
+        <style>
+        @media print {
+          pre, code, .callout {
+            break-inside: avoid;
+          }
+        }
+        </style>
+---
+
+[nf-core](https://nf-co.re) is a community-curated collection of [Nextflow](https://www.nextflow.io/) bioinformatics pipelines that follow standardized best practices. The BRC supports running nf-core pipelines on Hazel and maintains the official Hazel institutional profile in the nf-core/configs repository.
+
+## Available Pipelines
+
+All 140+ existing nf-core pipelines are available on hazel through the BRC **nf-core** and **Nextflow** modules. Once these modules are loaded, any nf-core pipeline is available to be run:
+
+```bash
+$ module load nf-core nextflow
+$ nextflow run nf-core/<pipeline> [options]
+```
+
+::: {.callout-important}
+The `nextflow run` command must be submitted from a **login node**. Nextflow then dispatches individual pipeline processes as SLURM jobs. Container images are pulled and converted to Singularity format automatically, and cached in `/share/$GROUP/$USER/tmp` so they are reused on subsequent runs.
+:::
+
+::: {.callout-note}
+For information on how to use BRC modules, see [Loading BRC Modules](loading_brc_modules.qmd).
+:::
+
+Some common nf-core pipelines include:
+
+| Pipeline | Description |
+|----------|-------------|
+| `nf-core/rnaseq` | End-to-end RNA-seq analysis |
+| `nf-core/sarek` | somatic/germline variant calling |
+| `nf-core/scrnaseq` | single-cell RNA-seq analysis |
+| `nf-core/atacseq` | ATAC-seq peak-calling and differential analysis |
+| `nf-core/ampliseq` | Amplicon sequencing analysis for microbiome / 16S rRNA studies |
+| `nf-core/mag` | Metagenome assembly, binning, and taxonomic classification |
+| `nf-core/funscan` | Screen nucleotide sequences in metagenomic data for functional genes |
+
+## Hazel Configuration Profile
+
+Hazel has an official [institutional profile](https://github.com/nf-core/configs/blob/master/docs/hazel.md) in the [nf-core/configs](https://github.com/nf-core/configs) repository. Activating it with `-profile hazel` automatically configures the SLURM executor, Singularity containers, resource ceilings, and partition routing — no additional config file needed.
+
+### Running a Pipeline with the Hazel Profile
+
+```bash
+$ nextflow run nf-core/<pipeline> -profile hazel
+```
+
+### Default Resource Limits
+
+| Setting | Default |
+|---|---|
+| Max memory | 128 GB |
+| Max CPUs | 24 |
+| Max walltime | 120 hours |
+| SLURM partition | `compute` |
+| Queue size | 16 concurrent jobs |
+
+Processes labeled `process_gpu` are automatically routed to the `gpu` partition and allocated one H100 GPU by default.
+
+### Overriding Defaults at Runtime
+
+Common overrides can be passed directly to `nextflow run`:
+
+```bash
+# Use a different partition
+$ nextflow run nf-core/<pipeline> -profile hazel --partition <PARTITION_NAME>
+
+# Raise the memory ceiling
+$ nextflow run nf-core/<pipeline> -profile hazel --max_memory 256.GB
+
+# Request a different GPU type or multiple GPUs
+$ nextflow run nf-core/<pipeline> -profile hazel --hazel_gpu 'gpu:a100:2'
+
+# Override the GPU partition
+$ nextflow run nf-core/<pipeline> -profile hazel --gpu_partition <PARTITION_NAME>
+```
+
+For changes you want to apply consistently across runs, save them in a local config file and pass it with `-c`:
+
+```bash
+$ nextflow run nf-core/<pipeline> -profile hazel -c my_overrides.config
+```
+
+## Citations
+
+[The nf-core framework for community-curated bioinformatics pipelines. Nat Biotechnol 38, 276–278 (2020).](https://doi.org/10.1038/s41587-020-0439-x)

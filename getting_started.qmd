@@ -106,51 +106,13 @@ Applications storage is **read-only from compute nodes**. Install or update soft
 **Recommended workflow:** Keep raw inputs in RS1 → stage them into scratch and run jobs there → copy final outputs back to RS1 → let scratch's 30-day cleanup handle the intermediates.
 :::
 
-## Useful Commands
+## Useful Resources
 
-### System and User Info
+### From the BRC
+- [COS Compute Handbook](https://hurwitzlab.github.io/COS_Compute_Handbook)
+- [Hazel Crash Course](https://hurwitzlab.github.io/hazel_crash_course/)
 
-```bash
-$ sinfo                          # available partitions and nodes
-$ groups                         # groups you belong to
-$ hostname                       # which node you are on
-```
-
-### Storage
-
-```bash
-$ du -sh .                       # size of current directory
-$ du -sh /path/to/dir/*          # size of each item in a directory
-$ quota                          # home directory usage
-$ quota -s -g [group_name]       # group quota
-$ ls -lrt                        # list files by modification time (newest last)
-```
-
-### Software
-
-```bash
-$ module avail                   # list available modules
-$ module load [name]             # load a module
-$ which [executable]             # path to an executable
-```
-
-## First Week Checklist
-
-**Before you start:**
-
-- [ ] Obtain UnityID and VPN access
-- [ ] Join your research group's allocation/project space
-- [ ] Review the Acceptable Use Policy
-
-**Getting connected:**
-
-- [ ] SSH into a login node: `ssh [UnityID]@login.hpc.ncsu.edu`
-- [ ] Check your home directory quota: `quota`
-- [ ] Locate your group's scratch space: `/share/$GROUP/$USER`
-- [ ] Find your group's RS1 storage: `/rs1/researchers/...`
-
-## Resources
-
+### From NC State OIT
 - [Getting started on Hazel](https://hpc.ncsu.edu/Documents/GetStarted.php)
 - [Cluster status](https://hpc.ncsu.edu/Monitor/ClusterStatusMemory.php)
 - [OIT HPC YouTube channel](https://www.youtube.com/@OITHPC)

@@ -4,7 +4,7 @@ A series of hands-on workshops introducing pipeline development and execution wi
 
 ## Workshops
 
-- **Day 0 (optional, self-paced):** [Getting Started on Hazel](getting_started.qmd), [Tour of Hazel](tour_of_hazel.qmd)
+- **Day 0 (optional, self-paced):** [Getting Started on Hazel](getting_started.qmd), [Tour of Hazel](tour_of_hazel.qmd), [Loading BRC Modules](loading_brc_modules.qmd), [nf-core Pipelines](nf_core_pipelines.qmd)
 - **Day 1 and 2:** TBD
 
 ## Course website

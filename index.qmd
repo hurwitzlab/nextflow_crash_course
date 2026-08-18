@@ -24,7 +24,11 @@ How to log on the the NC State HPC Cluster (Hazel)
 
 ### [Tour of Hazel / Command line 101](tour_of_hazel.html)
 
-### [Using shared oftware on Hazel]()
+### [Using shared software on Hazel](loading_brc_modules.html)
+How to load and run BRC-maintained software modules and containers on Hazel
+
+### [nf-core Pipelines](nf_core_pipelines.html)
+Running community-curated nf-core pipelines on Hazel using the BRC's institutional profile
 
 ## Day 1 and 2 qmd docs go here however you best want to organize them
 

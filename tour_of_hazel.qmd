@@ -25,10 +25,10 @@ format:
         </style>
 ---
 
-Welcome to the Tour of Hazel! In this hands-on workshop we will accomplish two main goals:
+Welcome to the Tour of Hazel! In this self-guided workshop you will accomplish two main goals:
 
 1. **Navigate Hazel** — walk through the HPC cluster's layout and understand which storage spaces are appropriate for which computing tasks.
-2. **Learn UNIX** — pick up just enough shell commands to move around, manage files, and feel at home on the command line.
+2. **Learn Linux** — pick up just enough shell commands to move around, manage files, and feel at home on the command line.
 
 Use this guided walk through. When you see a command block that starts with a `$`, that is a command that you should type. Lines below that command (without a `$`) are the expected output of that command.
 
