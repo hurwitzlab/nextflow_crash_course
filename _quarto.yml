@@ -12,5 +12,3 @@ website:
         text: Getting Started on Hazel
       - href: tour_of_hazel.qmd
         text: Tour of Hazel
-      - href: intro_to_nextflow.qmd
-        text: Intro to Nextflow

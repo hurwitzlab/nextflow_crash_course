@@ -5,7 +5,7 @@ A series of hands-on workshops introducing pipeline development and execution wi
 ## Workshops
 
 - **Day 0 (optional, self-paced):** [Getting Started on Hazel](getting_started.qmd), [Tour of Hazel](tour_of_hazel.qmd)
-- **Day 1:** [Intro to Nextflow](intro_to_nextflow.qmd)
+- **Day 1 and 2:** TBD
 
 ## Course website
 https://hurwitzlab.github.io/nextflow_crash_course/
