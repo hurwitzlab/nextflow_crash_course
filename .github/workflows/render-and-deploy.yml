@@ -1,0 +1,83 @@
+name: Render and Deploy Quarto
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: quarto-dev/quarto-actions/setup@v2
+
+      - name: Render website
+        run: quarto render
+
+      - name: Install Chromium
+        run: sudo apt-get install -y chromium-browser
+
+      - name: Install Puppeteer
+        run: npm install puppeteer-core
+
+      # TODO: add one { input, output } entry per workshop .qmd as the course grows.
+      - name: Print HTML to PDFs
+        run: |
+          mkdir -p output
+          node -e "
+          const puppeteer = require('puppeteer-core');
+          const path = require('path');
+          (async () => {
+            const browser = await puppeteer.launch({
+              executablePath: '/usr/bin/chromium-browser',
+              args: ['--no-sandbox']
+            });
+            const docs = [
+              { input: '_site/intro_to_nextflow.html', output: 'output/intro_to_nextflow.pdf' },
+            ];
+            for (const doc of docs) {
+              const page = await browser.newPage();
+              await page.goto('file://' + path.resolve(doc.input), { waitUntil: 'networkidle0' });
+              await page.pdf({
+                path: doc.output,
+                format: 'Letter',
+                displayHeaderFooter: false,
+                printBackground: true,
+                margin: { top: '1cm', bottom: '1cm', left: '1cm', right: '1cm' }
+              });
+              await page.close();
+            }
+            await browser.close();
+          })();
+          "
+
+      # TODO: add each new output/<name>.pdf path to the `git add` line below.
+      - name: Commit PDFs to repo
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add output/intro_to_nextflow.pdf
+          git diff --staged --quiet || git commit -m "chore: update rendered PDFs [skip ci]"
+          git push
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy-pages:
+    needs: render
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

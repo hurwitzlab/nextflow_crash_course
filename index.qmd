@@ -1,0 +1,29 @@
+---
+title: "Nextflow Crash Course"
+author:
+  - name: "Seth Weaver"
+    affiliations:
+      - name: "Bioinformatics Research Center"
+        url: "https://brc.ncsu.edu/"
+date: today
+format:
+  html:
+    theme: cosmo
+    toc: false
+    number-sections: false
+    code-copy: true
+---
+
+Welcome to the Nextflow Crash Course — a series of hands-on workshops introducing pipeline development and execution with [Nextflow](https://www.nextflow.io/).
+
+## Workshops
+
+### [Intro to Nextflow](intro_to_nextflow.html)
+
+<!-- TODO: one or two sentence summary of what this workshop covers. -->
+
+### Additional Resources
+
+<!-- TODO: add links to related handbooks, docs, or follow-on material, e.g.:
+1. [COS Compute Handbook](https://hurwitzlab.github.io/COS_Compute_Handbook/)
+-->

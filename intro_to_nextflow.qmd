@@ -1,0 +1,76 @@
+---
+title: "Intro to Nextflow"
+author:
+  - name: "Seth Weaver"
+    affiliations:
+      - name: "Bioinformatics Research Center"
+        url: "https://brc.ncsu.edu/"
+date: today
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    code-copy: true
+    code-overflow: wrap
+    include-in-header:
+      text: |
+        <style>
+        @media print {
+          pre, code, .callout {
+            break-inside: avoid;
+          }
+        }
+        </style>
+---
+
+<!--
+  TEMPLATE CHAPTER — duplicate this file for each new workshop in the course.
+
+  Conventions demonstrated below (see CLAUDE.md for the full write-up):
+  - Command blocks the student should type are fenced ```bash blocks prefixed with `$`.
+    Any output lines below (without a `$`) are the expected result, not something to type.
+  - Use `::: {.callout-tip}` / `::: {.callout-note}` / `::: {.callout-warning}` asides to
+    call out a concept, a tip, or a common pitfall without breaking the narrative flow.
+  - Sections use `#`/`##`/`###` headings; `number-sections: true` numbers them automatically.
+  - A horizontal rule (`---`) is used to separate major parts of a workshop.
+-->
+
+Welcome to [workshop name]! In this hands-on workshop we will accomplish two main goals:
+
+1. **[Goal one]** — <!-- TODO -->
+2. **[Goal two]** — <!-- TODO -->
+
+Use this guided walk through. When you see a command block that starts with a `$`, that is a command that you should type. Lines below that command (without a `$`) are the expected output of that command.
+
+---
+
+# Getting Started
+
+<!-- TODO: replace with real narrative -->
+
+## Example section
+
+Explain a concept, then show the command to run:
+
+```bash
+$ echo "hello world"
+hello world
+```
+
+::: {.callout-tip}
+## Concept: [name]
+Use a callout like this to define a term or highlight a concept the student needs before moving on.
+:::
+
+::: {.callout-warning}
+## Common pitfall
+Use a callout like this to flag a mistake students commonly make at this step.
+:::
+
+---
+
+# Next Section
+
+<!-- TODO: continue the workshop -->

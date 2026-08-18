@@ -1,0 +1,12 @@
+project:
+  type: website
+  output-dir: _site
+
+website:
+  title: "Nextflow Crash Course"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+      - href: intro_to_nextflow.qmd
+        text: Intro to Nextflow
