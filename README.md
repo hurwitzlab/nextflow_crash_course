@@ -2,14 +2,8 @@
 
 A series of hands-on workshops introducing pipeline development and execution with [Nextflow](https://www.nextflow.io/).
 
-<!-- TODO: once published, add the GitHub Pages URL here, e.g.:
-The full course site is available at: https://hurwitzlab.github.io/Nextflow_Crash_Course/
--->
-
-## Workshop follow-along tutorials
-
-### Intro to Nextflow
-<!-- TODO: one or two sentence summary -->
+## Course website
+https://hurwitzlab.github.io/nextflow_crash_course/
 
 ## Provide Feedback!
 <!-- TODO: add anonymous feedback form link, e.g.:
