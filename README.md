@@ -10,7 +10,6 @@ The full course site is available at: https://hurwitzlab.github.io/Nextflow_Cras
 
 ### Intro to Nextflow
 <!-- TODO: one or two sentence summary -->
-- PDF: `output/intro_to_nextflow.pdf`
 
 ## Provide Feedback!
 <!-- TODO: add anonymous feedback form link, e.g.:
