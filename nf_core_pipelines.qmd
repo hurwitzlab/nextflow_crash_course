@@ -76,7 +76,7 @@ $ nextflow run nf-core/<pipeline> -profile hazel
 | SLURM partition | `compute` |
 | Queue size | 16 concurrent jobs |
 
-Processes labeled `process_gpu` are automatically routed to the `gpu` partition and allocated one H100 GPU by default.
+Processes labeled `process_gpu` are automatically routed to the `gpu` partition and allocated one L40 GPU by default.
 
 ### Overriding Defaults at Runtime
 
