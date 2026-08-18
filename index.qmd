@@ -28,7 +28,7 @@ How to log on the the NC State HPC Cluster (Hazel)
 How to load and run BRC-maintained software modules and containers on Hazel
 
 ### [nf-core Pipelines](nf_core_pipelines.html)
-Running community-curated nf-core pipelines on Hazel using the BRC's institutional profile
+Running community-curated nf-core pipelines on Hazel using NC State's institutional profile
 
 ## Day 1 and 2 qmd docs go here however you best want to organize them
 

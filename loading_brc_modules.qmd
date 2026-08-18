@@ -132,15 +132,15 @@ If the files you're working with (SAM/BAM files, reference genomes, etc.) live u
 
     Add this to your `~/.bashrc` to make it permanent. The value is a comma-separated list of `src[:dest[:opts]]` entries, same syntax as `--bind`.
 
-    ::: {.callout-tip}
-    Bind at the group level (`/share/$GROUP`) rather than your own subdirectory (`/share/$GROUP/$USER`). Because the `singularity`/`apptainer` module also auto-binds `$PWD` (see above), if your own `APPTAINER_BINDPATH` entry is the *exact* directory you're sitting in when you load a module, Apptainer sees the same destination bound twice and prints a harmless but noisy warning:
+::: {.callout-tip}
+Bind at the group level (`/share/$GROUP`) rather than your own subdirectory (`/share/$GROUP/$USER`). Because the `singularity`/`apptainer` module also auto-binds `$PWD` (see above), if your own `APPTAINER_BINDPATH` entry is the *exact* directory you're sitting in when you load a module, Apptainer sees the same destination bound twice and prints a harmless but noisy warning:
 
-    ```
-    WARNING: While bind mounting '/share/brc/sdweave2:/share/brc/sdweave2': destination is already in the mount point list
-    ```
+```
+WARNING: While bind mounting '/share/brc/sdweave2:/share/brc/sdweave2': destination is already in the mount point list
+```
 
-    Binding the group root instead of your personal scratch directory still gives you access to everything under your own directory (permissions are unaffected — you see exactly what you could already see outside the container), but it's a different literal path than the one you're likely to actually `cd` into and load a module from, so the two bind entries stop colliding. The same logic applies to RS1: binding `/rs1` broadly avoids collisions with whatever project subdirectory you happen to be working in.
-    :::
+Binding the group root instead of your personal scratch directory still gives you access to everything under your own directory (permissions are unaffected — you see exactly what you could already see outside the container), but it's a different literal path than the one you're likely to actually `cd` into and load a module from, so the two bind entries stop colliding. The same logic applies to RS1: binding `/rs1` broadly avoids collisions with whatever project subdirectory you happen to be working in.
+:::
 
 3. **Bind the path explicitly for a single command** if you're calling `apptainer exec` yourself instead of going through a `module load` wrapper:
 
