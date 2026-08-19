@@ -53,7 +53,7 @@ For more information, review [Getting Started on Hazel](getting_started.qmd).
 
 ```bash
 # Requesting an interactive CPU node for XX hrs with XX cores and XX Gb of memory
-srun --pty --time=XX --cpus-per-task=XX --mem=XX bash
+srun --pty --time=XX:00:00 --cpus-per-task=XX --mem=XX bash
 ```
 
 For more information about submitting jobs on Hazel, including interactive jobs, see [Running Jobs with SLURM](https://hurwitzlab.github.io/COS_Compute_Handbook/chapters/04_running_jobs.html).
