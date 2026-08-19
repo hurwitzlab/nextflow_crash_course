@@ -8,12 +8,16 @@ https://hurwitzlab.github.io/nextflow_crash_course/
 
 ## Workshops
 
-**Day 0 (optional, self-paced):**
-  1. Getting Started on Hazel
-  2. Tour of Hazel
-  3. Loading BRC Modules
-  4. nf-core Pipelines
-     
+**Day 0 Workshop Prerequisites (optional, self-paced):**
+
+A set of resources to prepare you for the workshop, including:
+
+1. Accessing the Hazel HPC
+2. Linux 101
+3. BRC Software containers
+4. Interactive jobs
+5. And more... 
+
 **Day 1 and 2:** TBD
 
 
