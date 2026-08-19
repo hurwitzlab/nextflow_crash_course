@@ -16,19 +16,14 @@ format:
 
 Welcome to the Nextflow Crash Course — a series of hands-on workshops introducing pipeline development and execution with [Nextflow](https://www.nextflow.io/).
 
-## Day 0: Intro to HPC / Command line (Optional)
-Self-paced, to be completed before the workshop. Intended to get participants up to speed on the high-perfomance computing (HPC) environments.
+**This course is intended for...**
 
-### [Logging onto Hazel HPC](getting_started.html)
-How to log on the the NC State HPC Cluster (Hazel)
+## Day 0: Prerequisites for Nextflow Workshop (Optional, self-paced)
 
-### [Tour of Hazel / Command line 101](tour_of_hazel.html)
+To get the most out of this Nextflow workshop, please familiarize yourself with the following topics and complete the associated material if necessary:
 
-### [Using shared software on Hazel](loading_brc_modules.html)
-How to load and run BRC-maintained software modules and containers on Hazel
+### [Nextflow workshop prerequisites](00_prerequisites.qmd)
 
-### [nf-core Pipelines](nf_core_pipelines.html)
-Running community-curated nf-core pipelines on Hazel using NC State's institutional profile
 
 ## Day 1 and 2 qmd docs go here however you best want to organize them
 

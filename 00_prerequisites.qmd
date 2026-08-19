@@ -1,0 +1,77 @@
+---
+title: "Nextflow Workshop Prerequisites"
+author:
+  - name: "Seth Weaver"
+    affiliations:
+      - name: "Bioinformatics Research Center"
+        url: "https://brc.ncsu.edu/"
+date: today
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    code-copy: true
+    code-overflow: wrap
+    include-in-header:
+      text: |
+        <style>
+        @media print {
+          pre, code, .callout {
+            break-inside: avoid;
+          }
+        }
+        </style>
+---
+
+This page outlines what you should set up and review before the Nextflow workshop begins. Complete these steps ahead of time and review any materials necessary so you can come to the workshop ready to make the most of your time learing Nextflow!
+
+## Accessing the Hazel HPC
+
+- [ ] Please verify that you have a Hazel HPC account and request one from your PI if you don't yet have one
+
+- [ ] Familiarize yourself with logging onto to Hazel via SSH:
+
+```bash
+SSS <unity_id>@login.hpc.ncsu.edu
+```
+
+For more information, review [Getting Started on Hazel](getting_started.qmd).
+
+## Command Line Familiarity
+
+- [ ] You should have familiarity with navigating a Linux HPC environment and have a basic understanding of Hazel's storage spaces. For more information and a Linux crash course using Hazel, see [Tour of Hazel / Command Line 101](tour_of_hazel.qmd).
+
+## Software and Modules
+
+- [ ] The Nextflow pipelines you will be writing will use software containers hosted by the BRC. Please review the following documentation to learn more about how to use the BRC software repository: [Using Shared Software on Hazel](loading_brc_modules.qmd).
+
+## Interactive Jobs
+
+- [ ] In order to work on and run pipelines in a compute-ready environement, we will be using **interactive** jobs using **Slurm** on Hazel. To request an interactive node:
+
+```bash
+# Requesting an interactive CPU node for XX hrs with XX cores and XX Gb of memory
+srun --pty --time=XX --cpus-per-task=XX --mem=XX bash
+```
+
+For more information about submitting jobs on Hazel, including interactive jobs, see [Running Jobs with SLURM](https://hurwitzlab.github.io/COS_Compute_Handbook/chapters/04_running_jobs.html).
+
+## Understanding $PATH variables
+
+Your **path** variable (`$PATH`) is a list of directorys that your system will automatically search for executable files (Usually `/usr/local/bin`, and `/usr/bin`, and `/bin` by default). If you are trying to execute a file not in one of those directories, you will need to provide an absolute or relative path to your file.
+
+Additionally, you may add a new directory to your path with:
+
+```bash
+export PATH="$PATH:/path/to/your/directory"
+```
+
+## Nextflow Background (Optional)
+
+- [ ] Skim the [Nextflow documentation](https://www.nextflow.io/docs/latest/index.html) for a general orientation
+
+## nf-core background (Optional)
+
+- [ ] Learn more about the [nf-core project](https://nf-co.re/), a community-driven initiative to right reproducible bioinformatics pipelines using Nextflow. All of these pipelines are available for you to run on Hazel! See [Using nf-core pipelines](nf_core_pipelines.html) for more information.
