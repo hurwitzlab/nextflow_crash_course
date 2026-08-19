@@ -1,0 +1,306 @@
+---
+title: "Running Jobs with SLURM"
+author:
+  - name: "Seth Weaver"
+    affiliations:
+      - name: "Bioinformatics Research Center"
+        url: "https://brc.ncsu.edu/"
+date: today
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    code-copy: true
+    code-overflow: wrap
+    include-in-header:
+      text: |
+        <style>
+        @media print {
+          pre, code, .callout {
+            break-inside: avoid;
+          }
+        }
+        </style>
+---
+
+This page is adapted from the [COS Compute Handbook](https://hurwitzlab.github.io/COS_Compute_Handbook/)'s chapter on running jobs, and is reproduced here so it's available directly alongside the other Nextflow workshop prerequisites.
+
+## What is a Job?
+
+A **job** is the unit of work you submit to the cluster. It packages your analysis script together with resource requirements (cores, memory, time). A job-scheduler, called **SLURM**, queues the job, assigns it to compute nodes when resources are available, and manages its execution.
+
+Since real work cannot be done on the login nodes, learning how to submit jobs to the powerful compute nodes is an essential part of using Hazel effectively.
+
+## What is SLURM?
+
+When you work on your laptop, you're the only user—so you can run anything you want, anytime. A cluster is different. Hazel has hundreds of compute nodes, but thousands of researchers share them. Without a coordinator, jobs would compete for resources, nodes would sit idle while other work waited, and no one could predict when their analysis would actually run.
+
+That coordinator is **SLURM** (Simple Linux Utility for Resource Management). SLURM is the job scheduler that sits between you and the compute nodes. You describe what you need—cores, memory, time—and SLURM queues your request, waits until a suitable node is available, launches your work there, and cleans up afterward.
+
+Your workflow follows a consistent pattern every time:
+
+1. Write a **job script** — a shell script that declares your resource requirements and the commands to run
+2. **Submit** it with `sbatch`; you immediately get a job ID
+3. SLURM **queues** the job and schedules it when resources open up
+4. Your job **runs** on a compute node; output goes to log files you specify
+5. You check results when it finishes—no babysitting required
+
+You don't need to be active on Hazel for your job to run. Once a job is submitted, you can close your laptop and it will still run.
+
+## Anatomy of a Job Script
+
+A SLURM job script is a regular shell script with two distinguishing features: a block of `#SBATCH` directives near the top that tell SLURM what resources to allocate, and the analysis commands that follow. Here is an example job script in a file named `hello_world.sh`.
+
+```bash
+#!/bin/bash
+# ---------------------------------------
+# Hello World job script
+# ---------------------------------------
+
+# --- Resources ---
+#SBATCH --job-name=hello_world
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=4G
+#SBATCH --output=logs/hello_world%j.out
+#SBATCH --error=logs/hello_world%j.err
+#SBATCH --time=0:10:00
+
+# --- Environment ---
+module load python
+
+# --- Execute ---
+python hello.py
+```
+
+To submit a job script to SLURM, use the `sbatch` command:
+
+```bash
+$ sbatch hello_world.sh
+submitted batch job 12345
+```
+
+::: {.callout-note}
+In this example, `12345` is the `job id`.
+:::
+
+### How `#SBATCH` Directives Work
+
+Lines starting with `#SBATCH` look like comments to bash but are read by SLURM when you submit the script. A few rules to keep in mind:
+
+- Directives must appear **before any executable command** in the script. Once SLURM hits the first real command, it stops parsing directives.
+- Each directive uses the same long-form flag you would pass to `sbatch` on the command line. `#SBATCH --time=1:00:00` is equivalent to `sbatch --time=1:00:00 my_job.sh`.
+- Command-line flags **override** directives in the script, which is useful for one-off overrides without editing the file: `sbatch --time=4:00:00 my_job.sh`.
+- The shebang (`#!/bin/bash`) must be the first line. SBATCH directives come immediately after.
+
+::: {.callout-tip}
+Group related directives together (resources, output paths, notifications) and add a blank line between groups. It makes the script much easier to scan.
+:::
+
+### Resource Directives Reference
+
+| Directive | Example | Description |
+|---|---|---|
+| `--job-name` | `--job-name=hello` | Label shown in `squeue` output |
+| `--nodes` | `--nodes=1` | Number of compute nodes |
+| `--ntasks` | `--ntasks=1` | Number of parallel tasks (MPI ranks) |
+| `--cpus-per-task` | `--cpus-per-task=2` | CPU cores per task (use for threaded tools) |
+| `--mem` | `--mem=4G` | Total RAM for the job |
+| `--partition` | `--partition=compute` | Queue to submit to |
+| `--output` | `--output=out.%j.log` | Standard output file (`%j` = job ID) |
+| `--error` | `--error=err.%j.log` | Standard error file |
+| `--time` | `--time=2:00:00` | Wall-clock time limit (HH:MM:SS) |
+
+::: {.callout-tip}
+If you're unsure how much memory or time to request, start with a generous estimate, run a short test with a small subset of your data, and use `seff JOBID` after it finishes to see what was actually used — then tighten your request for the full run.
+:::
+
+### Environment Setup
+
+HPC systems use **modules** to manage software versions. In your job script, load the module for each tool your job needs before running it. Examples:
+
+```bash
+$ module load python          # system-provided python
+$ module load samtools/1.17   # load samtools version 1.17
+
+$ module load apptainer       # run containerized software
+```
+
+::: {.callout-important}
+Shared BRC container images live in `/rs1/shares/brc/admin/containers/images`. See [Using Shared Software on Hazel](loading_brc_modules.qmd) for more information.
+:::
+
+Key SLURM environment variables available inside every job, add these to your job script if needed:
+
+| Variable | Value |
+|---|---|
+| `$SLURM_JOB_ID` | Unique job ID |
+| `$SLURM_CPUS_PER_TASK` | Cores allocated (matches `--cpus-per-task`) |
+| `$SLURM_MEM_PER_NODE` | Memory allocated in MB |
+| `$SLURM_SUBMIT_DIR` | Directory where `sbatch` was run |
+
+## Job Monitoring and Management
+
+| Task | Command |
+|---|---|
+| Submit job | `sbatch job.sh` |
+| List your jobs | `squeue -u $USER` |
+| Detailed job info | `scontrol show job JOBID` |
+| Cancel a job | `scancel JOBID` |
+| Cancel all your jobs | `scancel -u $USER` |
+| Modify a pending job | `scontrol update JobId=JOBID TimeLimit=NEW_HH:MM:SS` |
+| Node/partition status | `sinfo` |
+
+### Reading `squeue` Output
+
+```bash
+$ squeue -u $USER
+JOBID   PARTITION   NAME          USER    ST   TIME   NODES  NODELIST
+948851  compute     hello_world   uid     R    0:23   1      node042
+948852  compute     bigrun        uid     PD   0:00   1      (Resources)
+```
+
+**Status codes:** `R` = Running · `PD` = Pending · `CG` = Completing
+
+When a job is pending, `(Resources)` means nodes are busy. `(Priority)` means your job is waiting behind higher-priority submissions.
+
+### Why is my job pending?
+
+```bash
+$ squeue -j JOBID --reason
+```
+
+Common reasons:
+
+- `Resources` — cluster at capacity; your job will start when nodes free up
+- `Priority` — other jobs have higher priority
+- `QOSMaxJobsPerUser` — you've hit the per-user job limit
+- `ReqNodeNotAvail` — the resources you requested don't exist or aren't available (check your directives)
+
+## Partitions (Queues)
+
+SLURM organizes nodes into **partitions**. In most cases, omit `--partition` and let SLURM choose based on your resource request.
+
+```bash
+$ sinfo                             # show all partitions
+$ sinfo -p compute                  # details for one partition
+```
+
+Typical partitions on Hazel:
+
+| Partition | Purpose |
+|---|---|
+| `compute` | Default general-purpose CPU partition; used automatically when `--partition` is omitted. Broadwell/Haswell/Cascade Lake nodes. Max runtime 4 days (up to 10 days with the `long` QOS). |
+| `compute_partners` | Extra CPU nodes contributed by partner research groups; open to all users but lower priority and capped at 2 hours unless your group holds a partner QOS with longer limits. |
+| `gpu` | GPU-equipped nodes (A100, H100, L40, P100, A30, RTX 2080, GTX 1080). Request with `--partition=gpu --gres=gpu:1` (or a specific GPU type). Max runtime 3 days. |
+| `gpu_partners` | Extra GPU nodes contributed by partner groups (adds H200, L40S, A10). Same partner tradeoff as `compute_partners`: larger pool, lower priority, capped at 2 hours by default. |
+| `xfer` | Dedicated data-transfer node — not for compute jobs. Use it for large `scp`/`rsync`/Globus-style transfers instead of tying up a login node. |
+
+## Standard Output and Error
+
+SLURM separates program output into two streams:
+
+- **stdout** (`--output`): normal results and print statements
+- **stderr** (`--error`): warnings and error messages
+
+The `%j` token in filenames is replaced by the job ID at runtime:
+
+```bash
+#SBATCH --output=logs/analysis.%j.out
+#SBATCH --error=logs/analysis.%j.err
+```
+
+Always create the log directory before submitting:
+
+```bash
+$ mkdir -p logs
+$ sbatch job.sh
+```
+
+## Common Errors and Fixes
+
+When a job fails, the error file is almost always your first stop:
+
+```bash
+$ cat logs/analysis.12345.err
+$ tail -50 logs/analysis.12345.err
+```
+
+For more detail on what SLURM recorded about the run — exit code, allocated resources, completion state — use `sacct`:
+
+```bash
+$ sacct -j 12345 --format=JobID,State,ExitCode,Elapsed,MaxRSS,ReqMem
+```
+
+Some common errors and fixes are shown below:
+
+### File or Directory Not Found
+
+Error:
+
+```bash
+/bin/bash: reads_R1.fastq: No such file or directory
+```
+
+- Use absolute paths everywhere: `/rs1/researchers/s/smith/data/reads_R1.fastq`
+- Verify files exist before submitting: `ls -l reads_R1.fastq`
+- Note for relative paths to files: jobs run from the directory where you called `sbatch`.
+
+### Out of Memory
+
+Error:
+
+```bash
+slurmstepd: error: Detected 1 oom-kill event(s)
+```
+
+- Increase memory: `#SBATCH --mem=16G`
+- Check what the job actually needed: `seff JOBID` (after it finishes)
+
+### Wall Time Exceeded
+
+Error:
+
+```bash
+slurmstepd: error: Job 12345 exceeded time limit, sending SIGTERM
+```
+
+- Increase time limit: `#SBATCH --time=8:00:00`
+- Test with a subset of data first to estimate real runtime
+
+### Module Not Found
+
+```bash
+ERROR: Unable to locate a modulefile for '<module_name>'
+```
+
+- Search for the correct name: `module av`
+- Check if `module` has access to the directory the module file is in with `module path`; if not use `module use /path/to/module/dir`.
+- Check if a prerequisite module must be loaded first
+
+### Permission Denied
+
+Error:
+
+```bash
+./my_script.sh: Permission denied
+```
+
+Fix:
+
+```bash
+$ chmod +x my_script.sh
+```
+
+## Interactive Jobs
+
+Sometimes you may need to get on a compute node for an interactive session to test, debug, or use GUI applications. The `srun --pty` command gives you a shell directly on a compute node. Most `SBATCH` directives can also be passed to `srun --pty` as flags. Some examples are below:
+
+```bash
+# 1 core, 10 minutes
+$ srun --pty -n 1 --time=0:10:00 bash
+
+# 4 cores on a single node, 30 minutes
+$ srun --pty --nodes=1 --ntasks=1 --cpus-per-task=4 --time=0:30:00 bash
+```

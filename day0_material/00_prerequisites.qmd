@@ -34,7 +34,7 @@ This page outlines what you should set up and review before the Nextflow worksho
 - [ ] Familiarize yourself with logging onto to Hazel via SSH:
 
 ```bash
-SSS <unity_id>@login.hpc.ncsu.edu
+SSH <unity_id>@login.hpc.ncsu.edu
 ```
 
 For more information, review [Getting Started on Hazel](getting_started.qmd).
@@ -56,7 +56,7 @@ For more information, review [Getting Started on Hazel](getting_started.qmd).
 srun --pty --time=XX:00:00 --cpus-per-task=XX --mem=XX bash
 ```
 
-For more information about submitting jobs on Hazel, including interactive jobs, see [Running Jobs with SLURM](https://hurwitzlab.github.io/COS_Compute_Handbook/chapters/04_running_jobs.html).
+For more information about submitting jobs on Hazel, including interactive jobs, see [Running Jobs with SLURM](running_jobs.qmd).
 
 ## Understanding $PATH variables
 
