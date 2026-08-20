@@ -18,7 +18,23 @@ A set of resources to prepare you for the workshop, including:
 4. Interactive jobs
 5. And more... 
 
-**Day 1 and 2:** TBD
+
+**Day 1 (half day): Foundations: Thinking in Channels and Processes** TBD
+
+Introduction to the Nextflow pipeline building blocks: 
+
+1. Hello World: Your First Process
+2. Hello Channels: How Data Flows
+3. Hello Workflow: Chaining Processes
+
+**Day 2 (full day): From Pipeline to Production** TBD
+
+Putting your pipeline to work in the SLURM HPC system: 
+
+1. Making Your Pipeline Configurable
+2. Hello Modules: Organizing for Reuse
+3. Hello Containers: Portability
+4. Running on SLURM
 
 
 
