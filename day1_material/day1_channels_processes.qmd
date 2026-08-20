@@ -1,0 +1,563 @@
+---
+title: "Day 1. Foundations: Thinking in Channels and Processes"
+subtitle: "(Half day)"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: false
+    number-sections: false
+execute:
+  eval: false
+---
+
+# Getting Started
+In this first part of the
+
+## 1. Cloning the repository
+If you haven't done this during the Day 0 prep, you will need to clone the repository with the workshop materials (data and code). To do this, once you have logged in to your HPC run: 
+```bash
+```
+
+## 2. Starting an interactive session
+We can't do any computation in the login node of an HPC system, so we need to start an interactive session first. The exact command depends on your HPC system and the scheduler it uses (e.g., SLURM, PBS, LSF). For example, on a SLURM-based system, you might run:
+```bash
+srun --pty --time=XX:00:00 --cpus-per-task=XX --mem=XX bash
+```
+You should see your command line change:
+(base) [mtouced@login02 ~]$
+[mtouced@c207n01 ~]$
+
+
+## 3. Setting up your working environment
+Once we have logged into the HPC system, we need to make sure we are in the correct working directory and have the necessary modules loaded. The exact commands depend on your HPC system and its configuration. For example, you might run:
+```bash
+cd /path/to/cloned/repo/day1_material
+module use /usr/local/usrapps/brc/brc_modules/modules
+module load nextflow/26.04.3
+```
+The path `/path/to/cloned/repo/day1_material` should be replaced with the actual path to the directory with the cloned repository on your HPC system. This is where the workflow scripts and files related to this tutorial will be located.
+
+You might have noticed that we are not using modules as we normally would in the HPC. ...complete...
+
+
+## 4. Examining our data
+Let's take a look at the data we will be working with in this workshop. If you do: 
+```bash
+ls ./data
+```
+You should see the following sequence data files: 
+```
+
+```
+
+
+---
+
+# Hello FASTQC: Your First Process
+
+## 1. Warmup: run FASTQC on one sample directly
+
+```bash
+# load it
+module load fastqc
+
+# test it
+fastqc -h
+
+# run it on one data sample
+fastqc data/
+```
+
+Examine the results
+
+Let's now run it with nextflow.
+
+---
+
+## 2. Examine the nextflow script and run it
+You are provided a fully functional, minimalist workflow script named
+`fastqc_example.nf` that does the same thing as before (run FASTQC on one sample)
+but with Nextflow.
+
+### 2.1. Examine the code
+
+Open `fastqc_example.nf` in your editor of choice.
+```bash
+nano fastqc_example.nf
+```
+
+
+**Full code file — `fastqc_example.nf`:**
+
+```groovy
+#!/usr/bin/env nextflow
+
+/*
+ * Run FASTQC
+ */
+process fastqc {
+
+    publishDir 'fastqc', mode: 'copy'
+
+    input:
+    path reads
+
+    output:
+    path "*_fastqc.{html,zip}"
+
+    script:
+    """
+    fastqc -t 4 ${reads}
+    """
+}
+
+workflow {
+
+    main:
+    // channel: grab one fastq file
+    reads_ch = Channel.fromPath('data/sample1_1.fastq')
+    
+
+    // run FASTQC
+    fastqc(reads_ch)
+}
+```
+
+A Nextflow workflow script typically includes one or more **process**
+definitions and the **workflow** itself, plus a few optional blocks we'll
+introduce later.
+
+Each **process** describes what operation(s) the corresponding pipeline step
+should accomplish, while the **workflow** describes the dataflow logic that
+connects the various steps.
+
+
+#### 2.1.1. The `process` definition
+```groovy
+process fastqc {
+
+    publishDir 'fastqc', mode: 'copy'
+
+    input:
+    path reads
+
+    output:
+    path "*_fastqc.{html,zip}"
+
+    script:
+    """
+    fastqc -t 4 ${reads}
+    """
+}
+```
+Here we have a process called `fastqc` that runs FastQC on a single input file and produces its standard HTML report and zip archive of results.
+
+This process definition contains an `input` block, an `output` block, and the `script` to execute. The input definition uses the `path` qualifier, telling Nextflow that `reads` refers to a file that needs to be staged into the task's working directory before the script runs. The output definition also uses the `path` qualifier — declaring the files Nextflow should expect to find once the script finishes.
+
+*Importantly*, the output definition does **not** determine what output will be created — it declares the expected output so Nextflow can look for it once execution completes. This verifies the task executed successfully and allows passing output to downstream processes. Output that doesn't match what's declared in the output block is not passed downstream.
+
+Notice that the script block refers to `${reads}` rather than a hardcoded filename. This variable is populated by whatever file Nextflow passes in through the input block, so the same process definition works regardless of which file it's given.
+
+The output pattern, `"*_fastqc.{html,zip}"`, is a glob rather than an exact filename. This is necessary because FastQC generates its own output filenames based on the input file's name — we don't control them directly, so we tell Nextflow to look for anything matching that pattern once the task completes.
+
+::: {.callout-warning}
+This process assumes exactly one file will be provided per task and does no validation of what that file actually is (a real fastq file? something else entirely?). Nextflow will attempt to run FastQC on whatever it's handed.
+:::
+
+In a real-world pipeline, a process usually also contains directives (e.g., cpus, publishDir) to control resources and where results end up — we'll introduce those next.
+
+::: {.callout-note}
+**A note on `publishDir`:** this is the traditional way to publish outputs
+in Nextflow, and you'll see it everywhere in existing pipelines (including
+most nf-core modules) — but it's technically the older pattern. A newer,
+recommended syntax (`output {}` blocks) exists, but since `publishDir` is
+still extremely common in the wild — and simple to reason about — we're
+using it throughout this workshop.
+:::
+
+### 2.2. Run the workflow
+
+#### 2.2.1. Launch the workflow and monitor execution
+
+```bash
+nextflow run fastqc_example.nf
+```
+
+**Command output:**
+```
+N E X T F L O W ~ version 26.04.4
+
+Launching fastqc_example.nf [goofy_torvalds] revision: c33d41f479
+
+executor > local (1)
+[65/7be2fa] fastqc | 1 of 1 ✔
+```
+
+If your console output looks something like that, congratulations — you
+just ran your first Nextflow workflow!
+
+The most important line:
+```
+[65/7be2fa] fastqc | 1 of 1 ✔
+```
+
+This tells us the `fastqc` process was successfully executed once (`1 of 1
+✔`), and points to where the output was written.
+
+#### 2.2.2. Find the output and logs in the `work` directory
+
+The first time Nextflow runs in a given directory, it creates a `work/`
+directory where it writes all files (and symlinks) generated during
+execution. Within `work/`, Nextflow creates a nested, hash-named subdirectory
+per process call, where it stages inputs (via symlinks by default), writes
+helper files, and writes logs and outputs.
+
+The truncated hash shown in square brackets (e.g. `[65/7be2fa]`) maps to the
+full directory path, e.g.:
+`work/65/7be2fa7be2fad5e71e5f49998f795677fd68`
+
+```bash
+tree -a work
+```
+
+**Directory contents:**
+```
+work
+└── 65
+└── 7be2fad5e71e5f49998f795677fd68
+├── .command.begin
+├── .command.err
+├── .command.log
+├── .command.out
+├── .command.run
+├── .command.sh
+├── .exitcode
+├── sample1_1.fastq -> <path-to-data>/sample1_1.fastq
+├── sample1_1_fastqc.html
+└── sample1_1_fastqc.zip
+```
+
+::: {.callout-note}
+**Don't see the same thing?** Exact subdirectory names will differ on your
+system. Log files are hidden in the terminal — use `tree -a work` or `ls -a`
+to see them.
+:::
+
+Open `sample1_1_fastqc.html` and you should see the familiar FastQC report.
+
+That may seem like a lot of scaffolding for the same report you could get by
+running FastQC directly — its value becomes clear once we start chaining
+multiple steps together and running things across many files at once, which
+is exactly what the rest of today builds toward.
+
+Of the other files in that directory, `.command.sh` is the one you'll reach
+for most — it shows the actual command Nextflow executed, without any of the
+bookkeeping:
+
+```bash
+#!/bin/bash -ue
+fastqc -t 4 sample1_1.fastq
+```
+
+This matches what we ran manually in the warmup. Here it's simple because
+the filename was still hardcoded, but soon you'll see commands built from
+variable interpolation, and `.command.sh` becomes very useful for
+troubleshooting exactly what Nextflow ran under the hood.
+
+Because we also set `publishDir 'fastqc', mode: 'copy'` in the process, a
+copy of the report files is placed in a `fastqc/` folder in your working
+directory — so you don't need to go digging through `work/` to find your
+results day to day.
+
+::: {.callout-tip}
+Re-run the same command a few times and peek inside `work/` again. Notice a
+**new** hash-named subdirectory appears each time, rather than the old one
+being overwritten. Nextflow always keeps a full record of every run. We'll
+come back to why that matters — and how to make Nextflow skip work it's
+already done — on Day 2.
+:::
+
+
+### 2.3. Exercise: modify the process
+
+Try the following on your own, using the `fastqc_example.nf` script as a
+starting point:
+
+Change the process so it runs FASTQC on a **different** file in `data/`
+instead of `sample1_1.fastq`.
+
+Run your modified script with:
+```bash
+nextflow run fastqc_example.nf
+```
+
+Take a few minutes to try this yourself before checking the solution below.
+
+::: {.callout-tip collapse="true"}
+## Solution
+
+```groovy
+#!/usr/bin/env nextflow
+
+/*
+ * Run FASTQC
+ */
+process fastqc {
+
+    publishDir 'fastqc', mode: 'copy'
+
+    input:
+    path reads
+
+    output:
+    path "*_fastqc.{html,zip}"
+
+    script:
+    """
+    fastqc -t 4 ${reads}
+    """
+}
+
+workflow {
+
+    main:
+    // channel: grab a different fastq file
+    reads_ch = Channel.fromPath('data/sample2_1.fastq')
+
+    // run FASTQC
+    fastqc(reads_ch)
+}
+```
+
+Note that the process itself didn't need to change at all — only the
+channel's source line changed. This is a preview of a bigger idea: processes
+describe *what* to do with data, channels control *which* data flows in.
+You'll see this separation again and again in Nextflow, and tomorrow you'll
+learn how to make that channel source configurable from the command line
+itself (no more editing the script by hand).
+:::
+
+
+## 3. Scaling up: from one sample to many
+
+Notice we only processed one file. What if we wanted FastQC *parallely* on *all* the reads in `data/`? In bash, you'd write a loop. In Nextflow, you change one line:
+
+```groovy
+reads_ch = Channel.fromPath('data/sample*_*.fastq')
+```
+
+That's it. Nextflow automatically fans this out into one parallel task per file — no loop, no manual job array, no extra code in the process itself.
+
+
+---
+
+# Hello Channels: How Data Flows
+
+## 1. Channels as conveyor belts
+
+So far, we've only fed our `fastqc` process a single hardcoded file. But
+real pipelines need to move many files — possibly many *different kinds* of
+files — between processes, often many at once and in parallel.
+
+This is exactly what **channels** are for. A channel is best thought of as a
+conveyor belt: items (files, values, or combinations of both) are placed
+onto it, and it carries them — one at a time — into whatever process is
+connected downstream. A process doesn't "loop over" a channel the way you
+might loop over files in bash; instead, Nextflow automatically starts a
+**separate task** for each item that arrives, and can run many of these
+tasks concurrently.
+
+This is why, back in Section 3, changing a single line —
+
+```groovy
+reads_ch = Channel.fromPath('data/sample*_*.fastq')
+```
+
+— was enough to go from "process one file" to "process every file in
+parallel." You didn't add a loop. You changed what gets placed on the belt.
+
+::: {.callout-tip}
+If you're coming from bash, the instinct is to reach for a `for` loop
+whenever you want to do something to multiple files. But a bash loop doesn't
+give you parallelism on its own — each iteration runs one after another,
+waiting for the previous one to finish. To actually parallelize a bash loop
+on an HPC, you'd typically need to build a job array or background/fan out each iteration yourself.
+
+In Nextflow, you instead reach for a channel with more than one item in it —
+the parallelism comes for free, without any extra scheduling code on your
+part.
+:::
+
+## 2. `Channel.fromPath`: one file (or many) per item
+
+You've already seen the simplest channel factory, `Channel.fromPath`, which
+emits one item per file matching a path or glob pattern:
+
+```groovy
+// a single file
+reads_ch = Channel.fromPath('data/sample1_1.fastq')
+
+// every file matching the pattern — one channel item per file
+reads_ch = Channel.fromPath('data/sample*_*.fastq')
+```
+
+Each item that comes out of this channel is a file path, and each one will
+trigger a separate call to whatever process it's connected to.
+
+## 3. `Channel.fromFilePairs`: keeping paired-end reads together
+
+FastQ data is often **paired-end**: each sample has two files (e.g.
+`sample1_1.fastq` and `sample1_2.fastq`, representing forward and reverse
+reads). These two files need to travel through the pipeline *together* —
+you never want to accidentally process `sample1_1.fastq` against
+`sample2_2.fastq`.
+
+`Channel.fromPath` won't help here, since it treats every file as its own
+independent item. Instead, Nextflow provides `Channel.fromFilePairs`, which
+groups matching files by a shared sample name and emits them as a single
+item: a tuple of `(sample_id, [file1, file2])`.
+
+```groovy
+read_pairs_ch = Channel.fromFilePairs('data/sample*_{1,2}.fastq')
+```
+
+The `{1,2}` glob pattern tells Nextflow which part of the filename
+distinguishes the pair members; everything else in the filename is treated
+as the shared sample identifier.
+
+::: {.callout-note}
+Try running just this line with `.view()` (introduced next) — the output
+makes the tuple structure very concrete, and is worth doing live before
+diving into the exercise.
+:::
+
+## 4. Peeking inside a channel: `.view()`
+
+Channels are a bit of a black box until you look inside them. The `.view()`
+operator lets you inspect items flowing through a channel without changing
+them — extremely useful for debugging and for building an intuition for
+what shape your data is in.
+
+```groovy
+Channel
+    .fromFilePairs('data/sample*_{1,2}.fastq')
+    .view()
+```
+
+Running this (with no process attached at all) will print each tuple to the
+console, e.g.:
+```
+[sample1, [data/sample1_1.fastq, data/sample1_2.fastq]]
+[sample2, [data/sample2_1.fastq, data/sample2_2.fastq]]
+```
+
+
+Get in the habit of adding `.view()` while building a pipeline, then
+removing it once you're confident the channel looks the way you expect.
+
+### 4.5. Reshaping items with `.map()`
+
+Sometimes the shape a channel factory gives you isn't quite the shape a
+process needs. The `.map()` operator lets you transform each item flowing
+through a channel — much like `map` in Python or R's `purrr::map` — by
+applying a function to every item.
+
+For example, say you only want the sample ID from each pair, discarding the
+file paths:
+
+```groovy
+Channel
+    .fromFilePairs('data/sample*_{1,2}.fastq')
+    .map { sample_id, files -> sample_id }
+    .view()
+```
+```
+sample1
+sample2
+```
+
+`.map()` is one of the most commonly used channel operators — you'll reach
+for it constantly to reshape data between one process's output and the
+next process's expected input.
+
+### 4.6. Gathering items with `.collect()`
+
+Every operator so far still emits one item at a time. But sometimes you
+want the *opposite*: to wait until every item has arrived, then gather them
+all into a single list — for example, once every sample has been FastQC'd
+individually, you might want a single downstream step (like MultiQC) that
+summarizes all reports together.
+
+```groovy
+Channel
+    .fromPath('data/sample*_1.fastq')
+    .collect()
+    .view()
+```
+```
+[data/sample1_1.fastq, data/sample2_1.fastq, data/sample3_1.fastq]
+```
+
+Notice the difference: instead of three separate items flowing through
+(one per file), `.collect()` produces a single item — a list containing
+everything that arrived. This is exactly the operator you reach for when a
+process needs to see *all* upstream outputs at once rather than being
+launched once per file.
+
+::: {.callout-warning}
+`.collect()` has to wait for **every** upstream item to arrive before it can
+emit anything. In a pipeline with many samples, this means the process
+downstream of a `.collect()` won't start until the slowest upstream task
+finishes — a useful thing to keep in mind when thinking about where
+parallelism starts and stops in your pipeline.
+:::
+
+### 4.7. Exercise: build a channel from paired-end data
+
+Using the toy paired-end dataset in `data/`, do the following:
+
+1. Build a channel with `Channel.fromFilePairs` that correctly groups each
+   sample's forward and reverse read files together.
+2. Add `.view()` to confirm the tuple structure looks correct — check that
+   each sample ID is paired with exactly two files, and that no files from
+   different samples get mixed together.
+3. Using `.map()`, transform the channel so it emits *just* the sample IDs,
+   discarding the file paths.
+
+Take a few minutes to work through this before checking the solution below.
+
+::: {.callout-tip collapse="true"}
+## Solution
+
+```groovy
+read_pairs_ch = Channel
+    .fromFilePairs('data/sample*_{1,2}.fastq')
+    .view()
+
+sample_ids_ch = read_pairs_ch
+    .map { sample_id, files -> sample_id }
+    .view()
+```
+
+Running this should print each pair first (from the first `.view()`), then
+just the sample IDs (from the second):
+```
+[sample1, [data/sample1_1.fastq, data/sample1_2.fastq]]
+[sample2, [data/sample2_1.fastq, data/sample2_2.fastq]]
+sample1
+sample2
+```
+
+The key insight here: `fromFilePairs` does the grouping work for you, so you
+never have to manually match up forward/reverse files by hand the way you
+might in a bash script. `.map()` then lets you reshape that grouped data
+into whatever shape your next process actually needs.
+:::
+
+### Takeaway
+
+You now know how channels move data through a pipeline, how to keep related
+files (like paired-end reads) grouped together, and how to inspect and
+reshape channel contents with `.view()`, `.map()`, and `.collect()`.
+
