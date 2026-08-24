@@ -67,7 +67,7 @@ If you are working in the NCSU HPC (Hazel), we recommend that you work in your *
 ## 2. Starting an interactive session
 We can't do any computation in the login node of an HPC system, so we need to start an interactive session first. The exact command depends on your HPC system and the scheduler it uses (e.g., SLURM, PBS, LSF). For example, on a SLURM-based system, you might run:
 ```bash
-srun --pty --time=4:00:00 --cpus-per-task=4 --mem=4 bash
+srun --pty --time=4:00:00 --cpus-per-task=4 --mem=4G bash
 ```
 This might take a second, especially if we all do it at the same time, but in a minute or two you should see your command line prompt change from something like: 
 ```
@@ -87,9 +87,18 @@ ls /path/to/cloned/repo/day1_material/data
 ```
 You should see the following sequence data files: 
 ```
-
+sample_001_R1.fastq
+sample_001_R2.fastq
+sample_002_R1.fastq
+sample_002_R2.fastq
+sample_003_R1.fastq
+sample_003_R2.fastq
 ```
 
+We can move to the day 1 repository since we will be working there: 
+```bash
+cd /path/to/cloned/repo/day1_material
+```
 
 ---
 
@@ -98,17 +107,22 @@ You should see the following sequence data files:
 ## 1. Warmup: run FASTQC on one sample directly
 
 ```bash
-# load it
-module load fastqc
+# if you are using the NCSU HPC and you haven't done this already, run: 
+# this allows you to use the software provided by the BRC as modules
+module use /usr/local/usrapps/brc/brc_modules/modules/
+
+# load fastqc
+module load fastqc/0.12.1 
 
 # test it
 fastqc -h
 
 # run it on one data sample
-fastqc data/
+fastqc data/sample_001_R1.fastq
 ```
 
-Examine the results
+Examine the results...
+
 
 Let's now run it with nextflow.
 
@@ -123,7 +137,7 @@ but with Nextflow.
 
 Open `fastqc_example.nf` in your editor of choice.
 ```bash
-nano fastqc_example.nf
+nano scripts/fastqc_example.nf
 ```
 
 
@@ -138,6 +152,7 @@ nano fastqc_example.nf
 process fastqc {
 
     module 'fastqc/0.12.1'
+    stageInMode 'copy'
     publishDir 'fastqc', mode: 'copy'
 
     input:
@@ -156,7 +171,7 @@ workflow {
 
     main:
     // channel: grab one fastq file
-    reads_ch = Channel.fromPath('data/sample1_1.fastq')
+    reads_ch = Channel.fromPath('data/sample001_1.fastq')
     
 
     // run FASTQC
@@ -176,8 +191,9 @@ connects the various steps.
 #### 2.1.1. The `process` definition
 ```groovy
 process fastqc {
-
+    
     module 'fastqc/0.12.1'
+    stageInMode 'copy'
     publishDir 'fastqc', mode: 'copy'
 
     input:
@@ -197,6 +213,7 @@ Here we have a process called `fastqc` that runs FastQC on a single input file a
 This process definition contains: 
 
 - a `module` directive: tells Nextflow to run `module load fastqc/0.12.1` before executing the script, so the `fastqc` command is available on the compute node without you having to load it yourself
+- a `stageInMode` directive: forces Nextflow to copy the input file into the work directory instead of symlinking it — necessary here because `fastqc/0.12.1` runs inside a Singularity container, which can't follow symlinks pointing outside its mounted paths.
 - a `publishDir` directive: tells Nextflow to copy this process's declared outputs into the `fastqc/` folder in your working directory, so you don't have to go digging through `work/` to find your results
 - an `input` block: uses the `path` qualifier, telling Nextflow that `reads` refers to a file that needs to be staged into the task's working directory before the script runs
 - an `output` block: uses the `path` qualifier, telling Nextflow that `reads` refers to a file that needs to be staged into the task's working directory before the script runs.
@@ -227,7 +244,83 @@ Here `module` works because NCSU HPC (Hazel) has `fastqc/0.12.1` available as an
 #### 2.2.1. Launch the workflow and monitor execution
 
 ```bash
-nextflow run fastqc_example.nf
+nextflow run scripts/fastqc_example_1.nf
+```
+You should get something like the following: 
+
+**Command output:**
+```
+Nextflow 26.04.6 is available - Please consider updating your version to it
+
+ N E X T F L O W   ~  version 26.04.3
+
+Launching `scripts/fastqc_example.nf` [determined_wescoff] revision: bef29c91e6
+
+executor >  local (1)
+[1e/a42796] process > fastqc (1) [  0%] 0 of 1 ✘
+ERROR ~ Error executing process > 'fastqc (1)'
+
+Caused by:
+  Process `fastqc (1)` terminated with an error exit status (127)
+
+
+Command executed:
+
+  fastqc -t 4 sample001_1.fastq
+
+Command exit status:
+  127
+
+Command output:
+  (empty)
+
+Command error:
+  .command.sh: line 2: fastqc: command not found
+
+Work dir:
+  /gpfs_common/share03/ivirus/mtouced/nextflow_workshop/day1_material/work/1e/a42796584247e8b5e17c6c0d485967
+
+Tip: you can replicate the issue by changing to the process work dir and entering the command `bash .command.run`
+
+ -- Check '.nextflow.log' file for details
+```
+**Reading the output:**
+
+- `[determined_wescoff]` — the run name (needed for `-resume`)
+- `revision: bef29c91e6` — a hash of the script version run
+- `executor > local (1)` — where tasks run 
+- `[1e/a42796]` — the work directory hash for this task (`work/1e/a42796.../`)
+- `[ 0%] 0 of 1 ✘` — progress; ✔ = success, ✘ = failure
+
+**When a process fails**, Nextflow adds an error block:
+
+- `Caused by` — one-line summary (here, exit status 127)
+- `Command executed` — the exact command that ran, variables already substituted
+- `Command exit status` — the raw exit code:
+
+  | Code | Meaning |
+  |---|---|
+  | 127 | Command not found (missing module/dependency) |
+  | 137 | Killed — often OOM |
+  | 139 | Segmentation fault |
+
+- `Command error` — stderr from the failed command; usually the most useful line for debugging
+- `Work dir` — contains `.command.sh` (script run), `.command.run` (launch wrapper), `.command.out`/`.command.err` (full logs)
+
+**Quick debugging steps:** read `Command error` → check the exit code → `cd` into `Work dir` and inspect `.command.sh` → rerun with `bash .command.run` if still unclear.
+
+
+As you can see, **we got an error!** This is because the fastqc process definition in `fastqc_example_1.nf` is missing the line: 
+
+```groovy
+module 'fastqc/0.12.1'
+```
+
+Which tells nextflow how to access/find the software for running FastQC. 
+
+Try running this instead: 
+```bash
+nextflow run scripts/fastqc_example_2.nf
 ```
 
 **Command output:**
@@ -270,18 +363,18 @@ tree -a work
 **Directory contents:**
 ```
 work
-└── 65
-└── 7be2fad5e71e5f49998f795677fd68
-├── .command.begin
-├── .command.err
-├── .command.log
-├── .command.out
-├── .command.run
-├── .command.sh
-├── .exitcode
-├── sample1_1.fastq -> <path-to-data>/sample1_1.fastq
-├── sample1_1_fastqc.html
-└── sample1_1_fastqc.zip
+└── ff
+    └── bb3b82315d28a45a7dff3bd8d7264d
+        ├── .command.begin
+        ├── .command.err
+        ├── .command.log
+        ├── .command.out
+        ├── .command.run
+        ├── .command.sh
+        ├── .exitcode
+        ├── sample_001_R1.fastq
+        ├── sample_001_R1_fastqc.html
+        └── sample_001_R1_fastqc.zip
 ```
 
 ::: {.callout-note}
@@ -290,7 +383,7 @@ system. Log files are hidden in the terminal — use `tree -a work` or `ls -a`
 to see them.
 :::
 
-Open `sample1_1_fastqc.html` and you should see the familiar FastQC report.
+Open `sample_001_R1_fastqc.html` and you should see the familiar FastQC report.
 
 > **HEADS UP!** That may seem like a lot of scaffolding for the same report you could get by running FastQC directly — its value becomes clear once we start chaining
 multiple steps together and running things across many files at once, which
@@ -302,7 +395,7 @@ bookkeeping:
 
 ```bash
 #!/bin/bash -ue
-fastqc -t 4 sample1_1.fastq
+fastqc -t 4 sample_001_R1.fastq
 ```
 
 This matches what we ran manually in the warmup. Here it's simple because
@@ -331,11 +424,11 @@ Try the following on your own, using the `fastqc_example.nf` script as a
 starting point:
 
 Change the process so it runs FASTQC on a **different** file in `data/`
-instead of `sample1_1.fastq`.
+instead of `sample_001_R1.fastq`.
 
 Run your modified script with:
 ```bash
-nextflow run fastqc_example.nf
+nextflow run fastqc_solution.nf
 ```
 
 Take a few minutes to try this yourself before checking the solution below.
@@ -352,6 +445,7 @@ Take a few minutes to try this yourself before checking the solution below.
 process fastqc {
 
     module 'fastqc/0.12.1'
+    stageInMode 'copy'
     publishDir 'fastqc', mode: 'copy'
 
     input:
@@ -370,7 +464,7 @@ workflow {
 
     main:
     // channel: grab a different fastq file
-    reads_ch = Channel.fromPath('data/sample2_1.fastq')
+    reads_ch = Channel.fromPath('data/sample_002_R1.fastq')
 
     // run FASTQC
     fastqc(reads_ch)
@@ -391,7 +485,7 @@ itself (no more editing the script by hand).
 Notice we only processed one file. What if we wanted FastQC *parallely* on *all* the reads in `data/`? In bash, you'd write a loop. In Nextflow, you change one line:
 
 ```groovy
-reads_ch = Channel.fromPath('data/sample*_*.fastq')
+reads_ch = Channel.fromPath('data/sample_*_*.fastq')
 ```
 
 That's it. Nextflow automatically fans this out into one parallel task per file — no loop, no manual job array, no extra code in the process itself.
@@ -416,11 +510,11 @@ This is why, back in Section 3, changing a single line —
 
 from
 ```groovy
-reads_ch = Channel.fromPath('data/sample1_1.fastq')
+reads_ch = Channel.fromPath('data/sample_001_R1.fastq')
 ```
 to 
 ```groovy
-reads_ch = Channel.fromPath('data/sample*_*.fastq')
+reads_ch = Channel.fromPath('data/sample_*_*.fastq')
 ```
 
 — was enough to go from "process one file" to "process every file in
@@ -450,25 +544,14 @@ emits one item per file matching a path or glob pattern:
 
 ```groovy
 // a single file
-reads_ch = Channel.fromPath('data/sample1_1.fastq')
+reads_ch = Channel.fromPath('data/sample_001_R1.fastq')
 
 // every file matching the pattern — one channel item per file
-reads_ch = Channel.fromPath('data/sample*_*.fastq')
+reads_ch = Channel.fromPath('data/sample_*_*.fastq')
 ```
 
 Each item that comes out of this channel is a file path, and each one will
 trigger a separate call to whatever process it's connected to.
-
-```{mermaid}
-flowchart LR
-    A["data/sample*_*.fastq<br><small>glob pattern</small>"] --> B["Channel.fromPath"]
-    B --> C1["sample1_1.fastq"]
-    B --> C2["sample1_2.fastq"]
-    B --> C3["sample2_1.fastq"]
-    C1 --> P1(["process call 1"])
-    C2 --> P2(["process call 2"])
-    C3 --> P3(["process call 3"])
-```
 
 
 ::: {.callout-note}
@@ -479,10 +562,10 @@ In Nextflow, a glob pattern is a string containing wildcard characters used to m
 ### 2.2 `Channel.fromFilePairs`: keeping paired-end reads together
 
 FastQ data is often **paired-end**: each sample has two files (e.g.
-`sample1_1.fastq` and `sample1_2.fastq`, representing forward and reverse
+`sample_001_R1.fastq` and `sample_001_R2.fastq`, representing forward and reverse
 reads). These two files need to travel through the pipeline *together* —
-you never want to accidentally process `sample1_1.fastq` against
-`sample2_2.fastq`.
+you never want to accidentally process `sample001_R1.fastq` against
+`sample002_R2.fastq`.
 
 `Channel.fromPath` won't help here, since it treats every file as its own
 independent item. Instead, Nextflow provides `Channel.fromFilePairs`, which
@@ -490,7 +573,7 @@ groups matching files by a shared sample name and emits them as a single
 item: a tuple of `(sample_id, [file1, file2])`.
 
 ```groovy
-read_pairs_ch = Channel.fromFilePairs('data/sample*_{1,2}.fastq')
+read_pairs_ch = Channel.fromFilePairs('data/sample_*_R{1,2}.fastq')
 ```
 
 The `{1,2}` glob pattern tells Nextflow which part of the filename
@@ -515,15 +598,15 @@ what shape your data is in.
 
 ```groovy
 Channel
-    .fromFilePairs('data/sample*_{1,2}.fastq')
+    .fromFilePairs('data/sample_*_R{1,2}.fastq')
     .view()
 ```
 
 Running this (with no process attached at all) will print each tuple to the
 console, e.g.:
 ```
-[sample1, [data/sample1_1.fastq, data/sample1_2.fastq]]
-[sample2, [data/sample2_1.fastq, data/sample2_2.fastq]]
+[sample1, [data/sample_001_R1.fastq, data/sample_001_R2.fastq]]
+[sample2, [data/sample_002_R1.fastq, data/sample_002_R2.fastq]]
 ```
 
 ::: {.callout-tip}
@@ -543,7 +626,7 @@ file paths:
 
 ```groovy
 Channel
-    .fromFilePairs('data/sample*_{1,2}.fastq')
+    .fromFilePairs('data/sample_*_R{1,2}.fastq')
     .map { sample_id, files -> sample_id }
     .view()
 ```
@@ -566,12 +649,12 @@ summarizes all reports together.
 
 ```groovy
 Channel
-    .fromPath('data/sample*_1.fastq')
+    .fromPath('data/sample_*_R1.fastq')
     .collect()
     .view()
 ```
 ```
-[data/sample1_1.fastq, data/sample2_1.fastq, data/sample3_1.fastq]
+[data/sample_001_1.fastq, data/sample_002_1.fastq, data/sample_003_1.fastq]
 ```
 
 Notice the difference: instead of three separate items flowing through
@@ -607,7 +690,7 @@ Take a few minutes to work through this before checking the solution below.
 
 ```groovy
 read_pairs_ch = Channel
-    .fromFilePairs('data/sample*_{1,2}.fastq')
+    .fromFilePairs('data/sample_*_R{1,2}.fastq')
     .view()
 
 sample_ids_ch = read_pairs_ch
@@ -618,8 +701,8 @@ sample_ids_ch = read_pairs_ch
 Running this should print each pair first (from the first `.view()`), then
 just the sample IDs (from the second):
 ```
-[sample1, [data/sample1_1.fastq, data/sample1_2.fastq]]
-[sample2, [data/sample2_1.fastq, data/sample2_2.fastq]]
+[sample1, [data/sample_001_R1.fastq, data/sample_001_R2.fastq]]
+[sample2, [data/sample_002_R1.fastq, data/sample_002_R2.fastq]]
 sample1
 sample2
 ```
@@ -675,22 +758,17 @@ starts with branching, and the exercise is where we turn it into real
 chaining.
 :::
 
-```{mermaid}
-flowchart LR
-    R["reads_ch"] --> F1(["fastqc<br><small>(raw)</small>"])
-    R --> T(["trim"])
-    T --> F2(["fastqc<br><small>(trimmed)</small>"])
-```
 
 ## 2. Branching out: raw QC + trimming
 
-We'll build on `fastqc_example.nf`. Alongside the existing `fastqc` process,
+We'll build on `fastqc_example_3.nf`. Alongside the existing `fastqc` process,
 add a new one for trimming with Trimmomatic:
 
 ```groovy
 process trim {
 
     module 'trimmomatic/0.39'
+    stageInMode 'copy'
     publishDir 'trimmed', mode: 'copy'
 
     input:
@@ -724,7 +802,7 @@ Now wire both processes to the same input channel in the `workflow` block:
 workflow {
 
     main:
-    reads_ch = Channel.fromPath('data/sample*_*.fastq')
+    reads_ch = Channel.fromPath('data/sample_*_*.fastq')
 
     fastqc(reads_ch)
     trim(reads_ch)
@@ -734,7 +812,7 @@ workflow {
 Run it:
 
 ```bash
-nextflow run fastqc_example.nf
+nextflow run fastqc_example_3.nf
 ```
 
 **Command output:**
@@ -777,7 +855,7 @@ Try it yourself first:
 workflow {
 
     main:
-    reads_ch = Channel.fromPath('data/sample*_*.fastq')
+    reads_ch = Channel.fromPath('data/sample_*_*.fastq')
 
     fastqc(reads_ch)
     trim(reads_ch)
@@ -833,6 +911,7 @@ The simplest approach, using only what we've covered so far, is to give
 process fastqc_raw {
 
     module 'fastqc/0.12.1'
+    stageInMode 'copy'
     publishDir 'results/qc_raw', mode: 'copy'
 
     input:
@@ -849,7 +928,8 @@ process fastqc_raw {
 
 process fastqc_trimmed {
 
-    module 'trimmomatic/0.39'
+    module 'fastqc/0.12.1'
+    stageInMode 'copy'
     publishDir 'results/qc_trimmed', mode: 'copy'
 
     input:
@@ -866,7 +946,8 @@ process fastqc_trimmed {
 
 process trim {
 
-    module 'fastqc/0.12.1'
+    module 'trimmomatic/0.39'
+    stageInMode 'copy'
     publishDir 'results/trimmed', mode: 'copy'
 
     input:
@@ -885,7 +966,7 @@ process trim {
 workflow {
 
     main:
-    reads_ch = Channel.fromPath('data/sample*_*.fastq')
+    reads_ch = Channel.fromPath('data/sample_*_*.fastq')
 
     fastqc_raw(reads_ch)
     trim(reads_ch)

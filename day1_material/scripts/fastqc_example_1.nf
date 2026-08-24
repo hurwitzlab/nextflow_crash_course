@@ -5,6 +5,7 @@
  */
 process fastqc {
 
+    stageInMode 'copy'
     publishDir 'fastqc', mode: 'copy'
 
     input:
@@ -23,9 +24,7 @@ workflow {
 
     main:
     // channel: grab one fastq file
-    //reads_ch = Channel.fromPath('data/sample1_1.fastq')
-    // channel: grab all the fastq files
-    reads_ch = Channel.fromPath('data/sample*_*.fastq')
+    reads_ch = Channel.fromPath('data/sample_001_1.fastq')
 
     // run FASTQC
     fastqc(reads_ch)
