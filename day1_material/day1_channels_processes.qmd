@@ -407,13 +407,10 @@ So far, we've only fed our `fastqc` process a single hardcoded file. But
 real pipelines need to move many files — possibly many *different kinds* of
 files — between processes, often many at once and in parallel.
 
-This is exactly what **channels** are for. A channel is best thought of as a
-conveyor belt: items (files, values, or combinations of both) are placed
-onto it, and it carries them — one at a time — into whatever process is
-connected downstream. A process doesn't "loop over" a channel the way you
-might loop over files in bash; instead, Nextflow automatically starts a
-**separate task** for each item that arrives, and can run many of these
-tasks concurrently.
+This is exactly what **channels** are for. A channel is both the data itself (files, values, or tuples) and the flow logic — because in Nextflow, the shape of the data (how many items, how they're grouped) is what determines the flow: how many tasks run, and which pieces of data move together.
+
+Another way to think of channels is as a conveyor belts: items (files, values, or combinations of both) are placed onto it, and it carries them — one at a time — into whatever process is connected downstream. A process doesn't "loop over" a channel the way you might loop over files in bash; instead, Nextflow automatically starts a
+**separate task** for each item that arrives, and can run many of these tasks concurrently.
 
 This is why, back in Section 3, changing a single line —
 
@@ -443,7 +440,10 @@ part.
 > If you would like how to create job arrays for your project you should attend one of our HPC workshops
 :::
 
-## 2. `Channel.fromPath`: one file (or many) per item
+## 2. Channel Factories: 
+A **channel factory** is what *creates* a channel in the first place — it's how data gets onto the conveyor belt to begin with. In other words, channel factories take something outside Nextflow (a glob pattern matching files on disk) and turn it into a channel of items.
+
+### 2.1. `Channel.fromPath`: one file (or many) per item
 
 You've already seen the simplest channel factory, `Channel.fromPath`, which
 emits one item per file matching a path or glob pattern:
@@ -476,7 +476,7 @@ flowchart LR
 In Nextflow, a glob pattern is a string containing wildcard characters used to match and select files or directories based on specific name patterns rather than writing out explicit file name
 :::
 
-## 3. `Channel.fromFilePairs`: keeping paired-end reads together
+### 2.2 `Channel.fromFilePairs`: keeping paired-end reads together
 
 FastQ data is often **paired-end**: each sample has two files (e.g.
 `sample1_1.fastq` and `sample1_2.fastq`, representing forward and reverse
@@ -503,7 +503,10 @@ makes the tuple structure very concrete, and is worth doing live before
 diving into the exercise.
 :::
 
-## 4. Peeking inside a channel: `.view()`
+## 3. Channel Operators
+A **channel operator** *transforms or inspects* a channel that already exists — it doesn't create data from scratch, it takes items already on the belt and does something to them as they pass by. `.view()`, `.map()`, and `.collect()` (below) are all operators: they take an existing channel and either peek inside it, reshape its items, or regroup them.
+
+### 3.1. Peeking inside a channel: `.view()`
 
 Channels are a bit of a black box until you look inside them. The `.view()`
 operator lets you inspect items flowing through a channel without changing
@@ -528,7 +531,7 @@ Get in the habit of adding `.view()` while building a pipeline, then
 removing it once you're confident the channel looks the way you expect.
 :::
 
-### 4.5. Reshaping items with `.map()`
+### 3.2. Reshaping items with `.map()`
 
 Sometimes the shape a channel factory gives you isn't quite the shape a
 process needs. The `.map()` operator lets you transform each item flowing
@@ -553,7 +556,7 @@ sample2
 for it constantly to reshape data between one process's output and the
 next process's expected input.
 
-### 4.6. Gathering items with `.collect()`
+### 3.3. Gathering items with `.collect()`
 
 Every operator so far still emits one item at a time. But sometimes you
 want the *opposite*: to **wait** until every item has arrived, then **gather** them
@@ -585,7 +588,7 @@ finishes — a useful thing to keep in mind when thinking about where
 parallelism starts and stops in your pipeline.
 :::
 
-### 4.7. Exercise: build a channel from paired-end data
+## 4. Exercise: build a channel from paired-end data
 
 Using the toy paired-end dataset in `data/`, do the following:
 

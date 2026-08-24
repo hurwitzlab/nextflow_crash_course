@@ -1,0 +1,16 @@
+---
+title: "Day 1. Foundations: Thinking in Channels and Processes"
+subtitle: "Inspired in Hello Nextflow by Seqera"
+author: Mery Touceda-Suárez 
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: false
+    number-sections: false
+execute:
+  eval: false
+---
+
+---
+

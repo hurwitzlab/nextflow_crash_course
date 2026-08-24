@@ -1,7 +1,7 @@
 ---
 title: "From ‘Hello Nextflow’ to Your First Pipeline"
 author:
-  - name: "María Touceda-Suárez"
+  - name: "María Touceda-Suárez & Seth Weaver"
     affiliations:
       - name: "Bioinformatics Research Center"
         url: "https://brc.ncsu.edu/"
@@ -25,7 +25,11 @@ To get the most out of this Nextflow workshop, please familiarize yourself with 
 ### [Nextflow workshop prerequisites](day0_material/00_prerequisites.qmd)
 
 
-## Day 1 and 2 qmd docs go here however you best want to organize them
+## Day 1 and 2: Workshop
+
+### [Day 1: Foundations: Thinking in Channels and Processes](day1_material/day1_channels_processes.qmd)
+### [Day 2: From Pipeline to Production](day2_material/day2_pipeline2production.qmd)
+
 
 ## Additional Resources
 
