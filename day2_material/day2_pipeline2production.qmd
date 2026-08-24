@@ -13,4 +13,243 @@ execute:
 ---
 
 ---
+# 1. Setting up
 
+# 2. Making your nextflow workflow configurable
+
+Yesterday you built a working 3-step pipeline — but every path is hardcoded: `data/sample_*_*.fastq` is baked into the script, and if a labmate wanted to run this on their data, they'd need to open the file and edit it by hand. That's fine for a workshop. It's not fine for a pipeline you intend to reuse, share, or hand off. This block is about closing that gap: turning "a script that works for me" into "a pipeline other people can run."
+
+## 1. `params`: naming your pipeline's dials
+
+Nextflow lets you declare parameters — named variables the workflow reads from, instead of literal values baked into the code. Any variable prefixed with `params.` is a pipeline parameter:
+
+At the top of your final script from yesterday (`fastqc_example_3.nf`) you can add the following: 
+```groovy
+params.input      = 'data/sample_*_*.fastq'
+params.outdir     = 'results'
+params.genome     = 'ref/genome.fa'
+```
+
+Inside the workflow block, you swap the hardcoded string for the parameter: 
+
+```groovy
+workflow {
+    main:
+    reads_ch = Channel.fromPath(params.input)
+    ...
+}
+```
+Nothing about the pipeline's logic changed — you're just naming the thing that used to be hardcoded, so it can be set from outside the script.
+
+::: {.callout-note}
+Defaults still matter. Declaring params.input = '...' gives it a default value. If nobody overrides it, the pipeline still runs — this is what lets you keep a working example script instead of one that errors out until every flag is supplied.
+:::
+
+## 2. `nextflow.config`: defaults live outside the script
+
+Right now those `params.*` lines live at the top of your `.nf` file. Nextflow also recognizes a special file, `nextflow.config`, **sitting next to your script**, and automatically loads it every time you run nextflow run. Anything declared there is available as `params.*` without you writing a single line in the workflow script itself:
+
+```groovy
+// nextflow.config
+params {
+    input  = 'data/sample_*_*.fastq'
+    outdir = 'results'
+    genome = 'ref/genome.fa'
+}
+```
+
+This matters for a simple reason: your **pipeline logic** (the `.nf` file) and **your pipeline's settings** (the `.config` file) are now **separate**. You can hand someone the .nf script and let them bring their own nextflow.config — or none at all, and get your defaults.
+
+
+::: {.callout-tip}
+This is also where later today's container and SLURM settings will live — `nextflow.config` is going to grow into the single place that controls how and where a pipeline runs, while the `.nf` file stays focused on what it does.
+:::
+
+
+## 3. Overriding from the command line
+
+Any `params.x` — whether it's default-set in the script or in nextflow.config — can be overridden at runtime with a double-dash flag of the same name:
+
+```bash
+nextflow run pipeline.nf --input 'data/sample_002_*.fastq' --outdir results_sample002
+```
+
+::: {.callout-warning}
+**One dash vs. two**. This trips almost everyone up at least once: your parameters use two dashes (--input), because they're user-defined. Nextflow's own built-in options use a single dash (-resume, -profile, -work-dir). If a run mysteriously ignores a flag you passed, check dash count first.
+:::
+
+## 4. `-resume`: don't redo finished work
+
+Remember from yesterday: every nextflow run creates a fresh, hash-named subdirectory in `work/` for each task, and old ones are never overwritten. That record of "what already ran, with what inputs" is exactly what makes the next feature possible.
+
+Add `-resume` to any run:
+
+```bash
+nextflow run pipeline.nf -resume
+```
+
+Nextflow checks each task against its cached record. If a task's inputs and command are byte-for-byte identical to a previous successful run, it skips re-executing it and reuses the cached output straight from `work/`. Only tasks that are new, changed, or previously failed actually run.
+
+Command output:
+```
+executor >  local (2)
+[a1/2b3c4d] fastqc_raw (1)   | 3 of 3, cached: 3 ✔
+[e5/6f7a8b] trim (1)         | 3 of 3, cached: 1 ✔
+```
+
+That cached: 3 is the payoff — three tasks didn't run at all, they were served from work/ because nothing about them changed.
+
+**Why this is a big deal in practice**: imagine a 6-step pipeline where step 5 crashes because of a typo in a parameter. Without `-resume`, fixing the typo means re-running steps 1–4 from scratch — potentially hours of compute you don't need to redo. With `-resume`, you fix step 5 and rerun; Nextflow recognizes steps 1–4 are untouched and skips straight to the failure point.
+
+::: {.callout-note}
+**What actually triggers a re-run**. Caching is based on a hash of the task's inputs and its exact command (including interpolated variables). Change the input file, change a parameter that feeds into the script block, or edit the process itself, and that task's hash changes — Nextflow correctly reruns it instead of quietly serving stale output.
+:::
+
+## 5. Profiles: one pipeline, swappable environments
+
+So far, everything you've configured is a value (a path, a filename). **Profiles let you configure behavior** — bundling up a set of config settings under a name, so you can flip between entire configurations with one flag.
+
+```groovy
+// nextflow.config
+profiles {
+    standard {
+        // the default — nothing special, runs locally as today's did
+    }
+
+    docker {
+        // placeholder for now — real settings land after lunch
+    }
+}
+```
+Select one at runtime with `-profile`:
+```bash
+nextflow run pipeline.nf -profile docker
+```
+Nothing about `docker` actually does anything yet — that's intentional. Right now, the goal is just to see the mechanism work: same script, same params, different `-profile` flag, and Nextflow visibly picks a different config block.
+
+::: {.callout-important}
+**The mental model to leave with**: a profile is a named bundle of settings, selected at runtime, layered on top of your regular config. Today it's an empty placeholder. This afternoon, docker/singularity profiles will turn container use on. Later today, a slurm profile will swap your executor from local to the scheduler. It's the exact same `profiles {} `mechanism each time — only what's inside the block changes.
+:::
+
+
+## 6. Exercise: parameterize the pipeline
+
+Using your Day 1 3-step pipeline (fastqc_raw → trim → fastqc_trimmed) as a starting point:
+
+1. Replace the hardcoded `Channel.fromPath('data/sample_*_*.fastq')` with `Channel.fromPath(params.input)`.
+2. Add `params.input`, `params.outdir`, and `params.genome` to a `nextflow.config` file (you won't use genome yet today — it's there because you'll need it for the capstone alignment step this afternoon).
+3. Update each process's `publishDir` to build off `params.outdir` instead of a hardcoded folder name (e.g. `publishDir "${params.outdir}/trimmed", mode: 'copy'`).
+4. Run the pipeline once normally, then run it again with `-resume` and confirm you see cached: in the output.
+5. Add a second, empty profile (`docker {}` alongside `standard {}`) to nextflow.config, and run once with `-profile docker` just to confirm the flag is accepted — nothing will look different yet, and that's the point.
+
+Take a few minutes before checking the solution.
+
+::: {.callout-tip collapse="true"}
+## Solution
+```groovy
+// nextflow.config
+params {
+    input  = 'data/sample_*_*.fastq'
+    outdir = 'results'
+    genome = 'ref/genome.fa'
+}
+
+profiles {
+    standard {
+        // default — local execution, no container
+    }
+    docker {
+        // placeholder — real settings this afternoon
+    }
+}
+```
+```groovy
+workflow {
+    main:
+    reads_ch = Channel.fromPath(params.input)
+
+    fastqc_raw(reads_ch)
+    trim(reads_ch)
+    fastqc_trimmed(trim.out)
+}
+```
+(each process's publishDir becomes, e.g., `publishDir "${params.outdir}/qc_raw", mode: 'copy'`)
+
+Run:
+```bash
+nextflow run pipeline.nf
+nextflow run pipeline.nf -resume
+nextflow run pipeline.nf -profile docker
+```
+The pipeline's logic hasn't changed at all — same three processes, same channel wiring. What changed is that paths, output locations, and (soon) execution environment are now things you set from outside the script, not things you edit inside it. That's the difference between a script you wrote for yourself and a pipeline someone else can pick up and run.
+:::
+
+
+
+# 3. Hello Modules: Organizing for Reuse
+
+Right now, your entire pipeline — every process block and the workflow block — lives in one .nf file. That's been fine for three processes. It stops being fine once a pipeline grows to ten, twenty, or fifty steps: the file becomes hard to navigate, hard to review in a pull request, and hard for a collaborator to find "the one process that does trimming" without scrolling past everything else.
+
+Modules are Nextflow's answer: each process (or a logically related group of processes) lives in its own .nf file, and your main workflow script includes them instead of defining them inline.
+
+## 1. Splitting a process into its own file
+Take your trim process out of the main script entirely and put it in its own 
+
+```groovy
+// modules/trim.nf
+
+process trim {
+
+    module 'trimmomatic/0.39'
+    stageInMode 'copy'
+    publishDir "${params.outdir}/trimmed", mode: 'copy'
+
+    input:
+    path reads
+
+    output:
+    path "trimmed_${reads}"
+
+    script:
+    """
+    trimmomatic SE -threads 4 ${reads} trimmed_${reads} \\
+        SLIDINGWINDOW:4:20 MINLEN:36
+    """
+}
+```
+Nothing about the process itself changed — same directives, same input/output, same script. It just moved.
+
+Back in your main script, pull it in with an include statement:
+file:
+```groovy
+// pipeline.nf
+include { trim } from './modules/trim.nf'
+
+workflow {
+    main:
+    reads_ch = Channel.fromPath(params.input)
+
+    fastqc_raw(reads_ch)
+    trim(reads_ch)
+    fastqc_trimmed(trim.out)
+}
+```
+`trim` is now callable in the workflow exactly as before — Nextflow resolves it from modules/trim.nf at runtime. The main script's job shrinks down to: import the pieces, wire them together.
+
+::: {.callout-note}
+The **path in include is relative to the importing script**, not your current working directory. `./modules/trim.nf` means "a `modules/` folder next to this `.nf` file" — this trips people up if they run nextflow run from a different directory than expected.
+:::
+
+## 2. A directory layout for a modular pipeline
+
+Once you do this for every process, a typical layout looks like:
+
+```
+my_pipeline/
+├── pipeline.nf          ← just the workflow block + includes
+├── nextflow.config
+└── modules/
+    ├── fastqc.nf
+    ├── trim.nf
+    └── align.nf          ← added this afternoon
+```
