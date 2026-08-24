@@ -1,6 +1,6 @@
 ---
-title: "Day 1. Foundations: Thinking in Channels and Processes"
-subtitle: "Inspired in Hello Nextflow by Seqera"
+title: "Day 2. From Pipeline to Production"
+subtitle: ""
 author: Mery Touceda-Suárez 
 format:
   html:
