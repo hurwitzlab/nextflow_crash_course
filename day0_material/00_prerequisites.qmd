@@ -58,6 +58,16 @@ srun --pty --time=XX:00:00 --cpus-per-task=XX --mem=XX bash
 
 For more information about submitting jobs on Hazel, including interactive jobs, see [Running Jobs with SLURM](running_jobs.qmd).
 
+## Github on Hazel
+
+- [ ] The material for this course exists as a github repo, that you should download before hand. To **clone** a github repo run the following from your scratch directory:
+
+```bash
+git clone https://github.com/hurwitzlab/nextflow_crash_course.git
+```
+
+`git` is automatically set up on hazel, and you can clone repos over **https** without being logged in. To integrate github more completely, see [Git and github on Hazel](github_on_hazel.qmd).
+
 ## Understanding $PATH variables
 
 Your **path** variable (`$PATH`) is a list of directorys that your system will automatically search for executable files (Usually `/usr/local/bin`, and `/usr/bin`, and `/bin` by default). If you are trying to execute a file not in one of those directories, you will need to provide an absolute or relative path to your file.

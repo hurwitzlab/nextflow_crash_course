@@ -1,0 +1,218 @@
+---
+title: "Git and GitHub on Hazel"
+author:
+  - name: "Seth Weaver"
+    affiliations:
+      - name: "Bioinformatics Research Center"
+        url: "https://brc.ncsu.edu/"
+date: today
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    code-copy: true
+    code-overflow: wrap
+    include-in-header:
+      text: |
+        <style>
+        @media print {
+          pre, code, .callout {
+            break-inside: avoid;
+          }
+        }
+        </style>
+---
+
+Job scripts, config files, and helper utilities are code — and like all code, they benefit from version control. Tracking them in **git** and pushing to **GitHub** answers questions that come up constantly in research computing: *what version of this script produced these results? what did I change last week that broke things? how do I share this pipeline with a collaborator?*
+
+This chapter is not a full git tutorial. It assumes you have a github account and know roughly what a commit is. This tutorial focuses on the parts that matter for running git on Hazel: setting up SSH-key authentication with GitHub, choosing where on the cluster your repositories live, and a workflow that keeps your laptop and the cluster in sync.
+
+::: {.callout-important}
+Git operations that talk to GitHub (`clone`, `push`, `pull`, `fetch`) need internet access. On Hazel, that means **login nodes only** — compute nodes are firewalled off from the outside world. Run git from a login node, then submit jobs once your code is in place.
+:::
+
+## Git in Sixty Seconds
+
+If you've used git before, this is the cheat sheet. If you haven't, this is enough to follow along — supplement with the [Pro Git book](https://git-scm.com/book) when you have time.
+
+| Command | What it does |
+|---------|--------------|
+| `git clone <url>` | Download a repository from GitHub to a new local directory |
+| `git status` | Show what's changed, staged, or untracked in your working copy |
+| `git add <file>` | Stage changes in `<file>` for the next commit |
+| `git commit -m "msg"` | Record staged changes as a new commit with message `msg` |
+| `git push` | Upload local commits to GitHub |
+| `git pull` | Download new commits from GitHub and merge into your branch |
+| `git log --oneline -n 10` | Show the last ten commits, one per line |
+| `git diff` | Show unstaged changes line-by-line |
+| `git branch` | Show your current branch, and other existing branches |
+| `git checkout` | Switch a different branch |
+| `git checkout -b <new_branch_name>` | Create a new branch and switch to it |
+
+A typical edit-and-share cycle is `git add` → `git commit` → `git push`. Pulling other people's changes (or your own from another machine) is `git pull`.
+
+## One-Time Setup on Hazel
+
+The first time you use git on the cluster, tell it who you are. These two values get baked into every commit you make from this account.
+
+```bash
+$ git config --global user.name  "Your Name"
+$ git config --global user.email "you@ncsu.edu"
+```
+
+Use the same email address that's attached to your GitHub account so commits show up under your profile.
+
+::: {.callout-tip}
+Set a sane default editor for commit messages so git doesn't drop you into `vi` unexpectedly:
+
+```bash
+$ git config --global core.editor "nano"
+```
+:::
+
+## Connecting Hazel to GitHub with SSH Keys
+
+GitHub stopped accepting passwords for git operations in 2021. The two remaining options are SSH keys and personal access tokens; **SSH keys are the better fit for HPC**. They don't expire, don't need to be re-typed, and work cleanly inside scripts.
+
+The idea: generate a keypair on Hazel, give the public half to GitHub, keep the private half in your home directory. When you `git push`, GitHub checks that you hold the matching private key and lets you in.
+
+### Step 1: Generate a Keypair
+
+From a Hazel login node:
+
+```bash
+$ ssh-keygen -t ed25519 -C "you@ncsu.edu — hazel"
+```
+
+Press **Enter** to accept the default file location (`~/.ssh/id_ed25519`). When prompted for a passphrase, you can leave it blank — the key is already protected by the file system permissions on your home directory, and a passphrase will block automated pulls.
+
+::: {.callout-note}
+The `-C` comment is a label, not a security setting. Use something like `"hazel"` or `"unityid@hazel"` so that when you look at your GitHub keys page you can tell which key came from which machine.
+:::
+
+### Step 2: Copy the Public Key
+
+Print the **public** half — it's the one ending in `.pub`:
+
+```bash
+$ cat ~/.ssh/id_ed25519.pub
+ssh-ed25519 AAAAC3Nz...truncated...K3w== you@ncsu.edu — hazel
+```
+
+Select the entire line and copy it.
+
+::: {.callout-warning}
+Never share `~/.ssh/id_ed25519` (the file without `.pub`). That's the private key — anyone with a copy can act as you on any system you've added the matching public key to.
+:::
+
+### Step 3: Add the Key to GitHub
+
+1. Go to <https://github.com/settings/keys>
+2. Click **New SSH key**
+3. **Title**: `Hazel` (or whatever helps you identify it later)
+4. **Key type**: Authentication Key
+5. Paste the public key into the **Key** field and click **Add SSH key**
+
+### Step 4: Test the Connection
+
+```bash
+$ ssh -T git@github.com
+Hi yourusername! You've successfully authenticated, but GitHub does not provide shell access.
+```
+
+That message — including the "does not provide shell access" line — means everything works. The first time you connect you'll be asked to verify GitHub's host fingerprint; type `yes`.
+
+### Step 5: Use SSH URLs When You Clone
+
+GitHub shows two URL styles on every repository page. For SSH-key auth to work, you need the SSH form:
+
+```bash
+# SSH (works with your key)
+$ git clone git@github.com:yourusername/your_project.git
+
+# HTTPS (will prompt for credentials Hazel can't supply)
+$ git clone https://github.com/yourusername/your_project.git
+```
+
+If you've already cloned a repo over HTTPS and want to switch, update its remote in place:
+
+```bash
+$ cd your_project
+$ git remote set-url origin git@github.com:yourusername/your_project.git
+```
+
+## Where to Put Repositories on Hazel
+
+Each of the [storage spaces on Hazel](getting_started.qmd) has a different fit for git:
+
+| Location | Use it for | Avoid for |
+|----------|-----------|-----------|
+| `/home/[UnityID]` | Personal dotfiles, small one-off scripts | Anything that pulls in data or generates large outputs — 1 GB fills fast |
+| `/rs1/researchers/...` | Project repositories that pair scripts with data | Repositories that don't need durable storage |
+| `/share/$GROUP/$USER` | Throwaway clones for testing | Anything you'd be sad to lose — scratch is wiped after 30 days |
+
+A typical layout pairs `configs/` and `scripts/` (tracked in git) with `data/` and `results/` (gitignored, living alongside). For a project like that, `/rs1/researchers/...` is usually the right home.
+
+## The Recommended Workflow: Edit Locally, Run on the Cluster
+
+Editing scripts in `nano` over an SSH session works, but it's slow and a poor environment for anything beyond a quick fix. A more productive loop looks like this:
+
+1. **Edit on your laptop** in your editor of choice (VS Code, Cursor, Sublime, vim — whatever you're fast in).
+2. **Commit and push** to GitHub from your laptop.
+3. **Pull on Hazel** from a login node.
+4. **Submit the job** with `sbatch` from the cluster.
+5. When the job finishes, optionally read the SLURM logs over SSH or via OnDemand.
+
+```bash
+# On your laptop
+$ git add scripts/fastqc_job.sh configs/fastqc_config.sh
+$ git commit -m "Tighten FastQC memory request"
+$ git push
+
+# On a Hazel login node
+$ cd /rs1/researchers/s/smith/my_project
+$ git pull
+$ sbatch scripts/fastqc_job.sh
+```
+
+The payoff is real: your editor's syntax highlighting, linting, and search work on every file in the project; collaborators see your changes the moment you push; and the cluster only ever sees code that's been committed.
+
+::: {.callout-tip}
+A common pattern is to keep two checkouts of the same repo — one on your laptop where you edit, and one in `/rs1/...` on Hazel where you run. As long as both stay clean and you always pull before running, they won't drift out of sync.
+:::
+
+::: {.callout-warning}
+Avoid editing the same file on both your laptop and the cluster between pulls. Git can usually merge text changes automatically, but it's a cleaner habit to treat the cluster checkout as **read-only** unless you're fixing something that can only be reproduced there.
+:::
+
+### When You Do Need to Edit on the Cluster
+
+Sometimes a path or a module name only becomes obvious once you're on Hazel. Edit, then push *from the cluster* so the change makes it back to GitHub:
+
+```bash
+$ nano scripts/fastqc_job.sh   # fix the path
+$ git add scripts/fastqc_job.sh
+$ git commit -m "Fix container path on Hazel"
+$ git push
+```
+
+Then `git pull` on your laptop next time you sit down at it. The point is to never let an in-place edit on the cluster drift away unrecorded.
+
+## First-Time Checklist
+
+Before running git operations on Hazel for the first time:
+
+- [ ] `git config --global user.name` and `user.email` are set
+- [ ] `~/.ssh/id_ed25519` and `id_ed25519.pub` exist on Hazel
+- [ ] The public key is added to <https://github.com/settings/keys>
+- [ ] `ssh -T git@github.com` returns the success message
+- [ ] You're cloning with `git@github.com:` URLs, not `https://`
+
+## Resources
+
+- [Pro Git book](https://git-scm.com/book) — the canonical free reference
+- [GitHub: Generating a new SSH key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent)
+- [GitHub CLI manual](https://cli.github.com/manual/)
+- [GitHub Skills](https://skills.github.com) — short hands-on tutorials
