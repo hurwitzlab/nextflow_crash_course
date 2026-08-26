@@ -1,13 +1,30 @@
 ---
-title: "Day 2. From Pipeline to Production"
-subtitle: ""
-author: Mery Touceda-Suárez 
+title: "Day 1. Foundations: Thinking in Channels and Processes"
+subtitle: "Inspired in Hello Nextflow by Seqera"
+author:
+  - name: "María (Mery) Touceda-Suárez"
+    affiliations:
+      - name: "Bioinformatics Research Center"
+        url: "https://brc.ncsu.edu/"
+date: today
 format:
   html:
+    theme: cosmo
     toc: true
     toc-depth: 3
+    number-sections: true
+    code-copy: true
+    code-overflow: wrap
     code-fold: false
-    number-sections: false
+    include-in-header:
+      text: |
+        <style>
+        @media print {
+          pre, code, .callout {
+            break-inside: avoid;
+          }
+        }
+        </style>
 execute:
   eval: false
 ---
@@ -253,3 +270,118 @@ my_pipeline/
     ├── trim.nf
     └── align.nf          ← added this afternoon
 ```
+
+pipeline.nf becomes short and readable almost as documentation: it tells you what steps exist and in what order, without burying that logic under every process's implementation detail.
+
+::: {.callout-tip}
+This is also what **makes a process reusable across pipelines**. A `modules/fastqc.nf` file doesn't care which pipeline includes it — you can drop the same module into a completely different project and include it there too, instead of copy-pasting the process definition by hand. This is exactly how **nf-core** (which you'll hear about at the end of today) organizes hundreds of shared, community-maintained modules.
+:::
+
+## 3. Reusing one module under two names: `include ... as`
+
+Recall yesterday's stretch task: to get fastqc_raw and fastqc_trimmed as two separately-named steps with two different publishDirs, you duplicated the entire process body into two near-identical process definitions — flagged at the time as "not ideal, but a reasonable trade-off for a 1.5-day workshop."
+
+Modules give you a cleaner way to do this, using `include ... as` to import the same process definition under two different local names:
+
+```groovy
+include { fastqc as fastqc_raw     } from './modules/fastqc.nf'
+include { fastqc as fastqc_trimmed } from './modules/fastqc.nf'
+```
+Both `fastqc_raw` and `fastqc_trimmed` now refer to the exact same process — one module file, no duplicated code — but each call is tracked and logged separately in the run output, since each `include ... as` creates its own named entry point into that process.
+
+::: {.callout-warning}
+This solves code duplication, not configuration duplication — both aliases still share the same hardcoded publishDir inside modules/fastqc.nf, so their outputs would collide unless you generalize the publishDir (e.g. driving the subfolder name from an input value). We won't do that generalization together, but you can try the **Stretch task at the end of this section** if you want to work on the solution. Here we are just flagging it so the trade-off is explicit rather than something you discover by accident. 
+:::
+
+### Why this matters as a pipeline grows
+Three processes in one file is a style choice. Fifteen processes in one file is a **maintenance** problem — nobody wants to Ctrl-F through five hundred lines to find one process, and code review on a single massive file is painful compared to reviewing a focused, one-process diff. Modules are how real, production Nextflow pipelines (including everything under nf-core) stay navigable as they grow. Additionally, separating your processes into modules allows you to **reuse** them in different workflows or pipelines without having to replicate them constantly. 
+
+## 4. Exercise: refactor into modules
+
+Using your parameterized 3-step pipeline from this morning:
+
+- Create a `modules/` directory next to your pipeline script.
+- Move `fastqc_raw`, `trim`, and `fastqc_trimmed` each into their own file inside `modules/` (fastqc.nf, trim.nf — your choice whether fastqc_raw/fastqc_trimmed share one file or get two).
+- Add the corresponding `include { ... }` from `'./modules/...'` statements at the top of your main pipeline script.
+- Confirm your main script's workflow block is now the only thing left in that file besides the include lines.
+- Run the pipeline again — output should be identical to before refactoring.
+
+
+::: {.callout-tip collapse="true"}
+# Solution
+
+```groovy
+// pipeline.nf
+include { fastqc as fastqc_raw     } from './modules/fastqc.nf'
+include { fastqc as fastqc_trimmed } from './modules/fastqc.nf'
+include { trim                     } from './modules/trim.nf'
+
+workflow {
+    main:
+    reads_ch = Channel.fromPath(params.input)
+
+    fastqc_raw(reads_ch)
+    trim(reads_ch)
+    fastqc_trimmed(trim.out)
+}
+```
+
+(`modules/fastqc.nf` contains a single process `fastqc { ... }` definition; `modules/trim.nf` is unchanged from section 1 above, just moved)
+
+:::
+
+
+
+### Stretch task: Parameterize `publishDir `across aliased calls
+
+If you tried the `include {...}` as approach in section 3, you may have noticed a wrinkle: `fastqc_raw` and `fastqc_trimmed` both point to the same `modules/fastqc.nf`, so they share the same hardcoded `publishDir` — you lose the clean `qc_raw/` vs `qc_trimmed/` separation from Day 1's stretch task.
+
+Try resolving this by passing the output subfolder in as a process input, rather than hardcoding it inside the module:
+
+::: {.callout-tip collapse="true"}
+# Solution
+```groovy
+// modules/fastqc.nf
+process fastqc {
+
+    module 'fastqc/0.12.1'
+    stageInMode 'copy'
+    publishDir "${params.outdir}/${label}", mode: 'copy'
+
+    input:
+    val label
+    path reads
+
+    output:
+    path "*_fastqc.{html,zip}"
+
+    script:
+    """
+    fastqc -t 4 ${reads}
+    """
+}
+```
+```groovy
+// pipeline.nf
+include { fastqc as fastqc_raw     } from './modules/fastqc.nf'
+include { fastqc as fastqc_trimmed } from './modules/fastqc.nf'
+include { trim                     } from './modules/trim.nf'
+
+workflow {
+    main:
+    reads_ch = Channel.fromPath(params.input)
+
+    fastqc_raw(Channel.value('qc_raw'), reads_ch)
+    trim(reads_ch)
+    fastqc_trimmed(Channel.value('qc_trimmed'), trim.out)
+}
+```
+
+Notice that `label` is declared with the val qualifier (`val label`) rather than path — this tells Nextflow it's a plain value (a string), not a file to be staged into the task's working directory. Since fastqc now expects two inputs positionally (label, then reads), each call supplies both: `Channel.value('qc_raw')` wraps a single string so it lines up as a channel item, just like reads_ch does for the file input.
+
+> Note. This is genuinely one module now doing the job that took two separate process definitions on Day 1 — no duplicated process body, and each call still gets its own labeled output folder. The trade-off: the process signature is slightly less obvious at a glance (two positional inputs instead of one), which is exactly why this was left as a stretch task rather than the default path through this section.
+:::
+
+
+
+# 4. 

@@ -1,13 +1,30 @@
 ---
 title: "Day 1. Foundations: Thinking in Channels and Processes"
 subtitle: "Inspired in Hello Nextflow by Seqera"
-author: Mery Touceda-Suárez 
+author:
+  - name: "María (Mery) Touceda-Suárez"
+    affiliations:
+      - name: "Bioinformatics Research Center"
+        url: "https://brc.ncsu.edu/"
+date: today
 format:
   html:
+    theme: cosmo
     toc: true
     toc-depth: 3
+    number-sections: true
+    code-copy: true
+    code-overflow: wrap
     code-fold: false
-    number-sections: false
+    include-in-header:
+      text: |
+        <style>
+        @media print {
+          pre, code, .callout {
+            break-inside: avoid;
+          }
+        }
+        </style>
 execute:
   eval: false
 ---
@@ -171,7 +188,7 @@ workflow {
 
     main:
     // channel: grab one fastq file
-    reads_ch = Channel.fromPath('data/sample001_1.fastq')
+    reads_ch = Channel.fromPath('data/sample_001_1.fastq')
     
 
     // run FASTQC
