@@ -5,7 +5,8 @@
  */
 process fastqc {
 
-    stageInMode 'copy'
+    container '/usr/local/usrapps/brc/brc_modules/images/quay.io_biocontainers_fastqc:0.12.1--hdfd78af_0.sif'    
+    
     publishDir 'fastqc', mode: 'copy'
 
     input:
@@ -24,7 +25,7 @@ workflow {
 
     main:
     // channel: grab one fastq file
-    reads_ch = Channel.fromPath('data/sample_001_1.fastq')
+    reads_ch = Channel.fromPath('../data/sample_001_R1.fastq')
 
     // run FASTQC
     fastqc(reads_ch)
