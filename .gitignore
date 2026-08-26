@@ -3,3 +3,14 @@ _site/
 
 /.quarto/
 **/*.quarto_ipynb
+
+# Nextflow run artifacts
+work/
+.nextflow/
+.nextflow.log*
+
+# Nextflow example output/publishDir directories
+fastqc/
+results/
+output/
+outdir/
