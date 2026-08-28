@@ -12,7 +12,7 @@ format:
     theme: cosmo
     toc: true
     toc-depth: 3
-    number-sections: true
+    number-sections: false
     code-copy: true
     code-overflow: wrap
     code-fold: false
@@ -154,7 +154,7 @@ Nothing about `docker` actually does anything yet — that's intentional. Right 
 Using your Day 1 3-step pipeline (fastqc_raw → trim → fastqc_trimmed) as a starting point:
 
 1. Replace the hardcoded `Channel.fromPath('data/sample_*_*.fastq')` with `Channel.fromPath(params.input)`.
-2. Add `params.input`, `params.outdir`, and `params.genome` to a `nextflow.config` file (you won't use genome yet today — it's there because you'll need it for the capstone alignment step this afternoon).
+2. Add `params.input`, `params.outdir`, and `params.genome` to a `nextflow.config` file (you won't use genome yet today — it's there because you'll need it for the capstone assembly step this afternoon).
 3. Update each process's `publishDir` to build off `params.outdir` instead of a hardcoded folder name (e.g. `publishDir "${params.outdir}/trimmed", mode: 'copy'`).
 4. Run the pipeline once normally, then run it again with `-resume` and confirm you see cached: in the output.
 5. Add a second, empty profile (`docker {}` alongside `standard {}`) to nextflow.config, and run once with `-profile docker` just to confirm the flag is accepted — nothing will look different yet, and that's the point.
@@ -268,7 +268,7 @@ my_pipeline/
 └── modules/
     ├── fastqc.nf
     ├── trim.nf
-    └── align.nf          ← added this afternoon
+    └── assembly.nf          ← added this afternoon
 ```
 
 pipeline.nf becomes short and readable almost as documentation: it tells you what steps exist and in what order, without burying that logic under every process's implementation detail.
@@ -383,5 +383,438 @@ Notice that `label` is declared with the val qualifier (`val label`) rather than
 :::
 
 
+## 4. Hello Containers: Portability
 
-# 4. 
+Every process you've written so far has assumed the tool it needs (`fastqc`, `trimmomatic`, ...) is already installed and on the `PATH` (in our case because we were using HPC modules). That works fine as long as everyone runs this on our cluster with our exact module set — but the moment someone runs it on a different HPC, their own laptop, or even just a different module version six months from now, that assumption is gone. In that case, the pipeline either fails outright or worse, runs quietly with the wrong tool version and gives them different results than yours. **Containers** fix this by packaging the tool and everything it depends on into one portable unit, so "works on our cluster" becomes "works anywhere."
+
+### 4.1 Why containers
+
+Two tools rarely agree on which version of a third tool they need. `salmon 1.4` and `salmon 1.10` can give you meaningfully different quantifications — and "works on my machine" isn't a reproducible method. This is dependency hell: manageable for one tool on one machine, unmanageable for a pipeline with a dozen tools running on a cluster, a laptop, and a collaborator's machine six months from now.
+
+A container packages a tool *and* its exact runtime environment — OS libraries, dependencies, version — into a single portable image. Point a process at a container instead of a module, and "works on my machine" becomes "works on any machine with a container runtime." That's the whole pitch: reproducibility across machines, across time, and across collaborators who don't share your module system.
+
+::: {.callout-note}
+This is also why `publishDir`'s brittleness (Day 1, §2.1.1) matters more once you're using containers — the container guarantees the *tool* is reproducible, but you still own getting the *outputs* somewhere sane. Keep that in mind for the stretch task later today.
+:::
+
+### 4.2 Docker vs. Singularity/Apptainer
+
+Docker is the tool most people mean when they say "containers" — and it's what you'll see in almost every published pipeline's documentation. But Docker requires a root-level daemon running on the host, which HPC administrators will not grant you on a shared, multi-tenant cluster. That's not a policy quirk — it's a real privilege-escalation risk when hundreds of users share a machine.
+
+**Apptainer** (the actively maintained fork of Singularity — you'll see both names, they're the same lineage) was built specifically to solve this: it runs containers as your own user, no daemon, no elevated privileges. It's also built to *read Docker images directly*, so you don't lose access to the huge existing library of Docker-based bioinformatics containers (e.g. everything on [BioContainers](https://biocontainers.pro/)) — Apptainer just converts them on the fly.
+
+This is why HPC environments standardize on Apptainer/Singularity and not Docker: same portability guarantee, none of the daemon/root problem.
+
+### 4.2.1 Running a container by hand
+
+Before Nextflow handles this for you, it's worth seeing what actually happens under the hood. Apptainer runs a container with `exec`:
+
+```bash
+module load apptainer
+apptainer exec /usr/local/usrapps/brc/brc_modules/images/quay.io_biocontainers_fastqc:0.12.1--hdfd78af_0.sif fastqc --help 
+```
+
+You should see FastQC's help output print out, run from inside the container, without FastQC being installed anywhere on the host. We keep a library of pre-pulled `.sif` images on `/usr/local/usrapps/brc/brc_modules/images/` for exactly this reason — you don't need to pull from Docker Hub or Quay live on the cluster.
+
+This is the same idea as `module load fastqc` — get a tool onto your `PATH` — but instead of relying on our cluster's module system, you're pointing directly at a self-contained image that would run identically on any machine with Apptainer or Docker installed.
+
+
+**The catch:** doing this for every process, by hand, for every sample, doesn't scale — that's exactly the kind of bookkeeping Nextflow exists to take off your hands. Which brings us back to profiles.
+
+
+### 4.3 Turning container use on: it's just another profile
+
+You already met `profiles` in §2 as a way to swap settings without touching your pipeline code — a `test` profile with small inputs, a `slurm` profile with executor settings. Container engines slot into the exact same mechanism. `docker` and `singularity` (or `apptainer`) are just profile names that flip a container engine on:
+
+```groovy
+// nextflow.config
+apptainer {
+    enabled    = true
+    autoMounts = true
+}
+```
+
+`autoMounts` handles the common case — your work directory and inputs get bound into the container automatically. Run with `-profile apptainer` (or roll this into whichever profile you're already using for the cluster) and every process that declares a `container` directive will run inside it.
+
+Adding a container to a process looks like this:
+
+```groovy
+process FASTQC {
+    container '/usr/local/usrapps/brc/brc_modules/images/quay.io_biocontainers_fastqc:0.12.1--hdfd78af_0.sif'
+
+    input:
+    path reads
+
+    output:
+    path "*_fastqc.html"
+
+    script:
+    """
+    fastqc ${reads}
+    """
+}
+```
+Notice this is the exact image you just ran by hand in §4.2.1 — Nextflow isn't doing anything magical here, it's running the same `apptainer exec` call for you, once per item in the channel, instead of you typing it out per sample.
+
+
+### 4.4 [Our HPC] Reference the container path directly, not the module
+
+::: {.callout-important}
+### This is specific to NCSU cluster — read this before the exercise
+
+Some of what you'd expect to be a normal HPC "module" here is actually a wrapped Singularity/Apptainer image — `module load <tool>` on those doesn't give you a native binary, it gives you a shim around a container. When Nextflow *also* tries to manage containers for that same process, the two layers of staging conflict, and jobs can fail or silently stage the wrong files.
+
+**The fix: skip the module entirely and point the `container` directive at the image path directly.**
+
+```groovy
+process fastqc {
+    container '/usr/local/usrapps/brc/brc_modules/images/quay.io_biocontainers_fastqc:0.12.1--hdfd78af_0.sif'
+
+    input:
+    tuple val(sample_id), path(reads)
+
+    output:
+    tuple val(sample_id), path("*_fastqc.{html,zip}")
+
+    script:
+    """
+    fastqc -t 4 ${reads}
+    """
+}
+```
+
+Requirements for this to work:
+
+1. **Enable Apptainer in `nextflow.config`** (§4.3, above) — `apptainer.enabled = true`.
+2. **The `apptainer` module still needs to be loaded on the host** before you launch Nextflow — Nextflow calls out to the `apptainer` binary to run the image, so the binary itself has to be on `PATH` even though the *process* isn't using `module load` anymore.
+```bash
+   module load apptainer
+   nextflow run main.nf -profile apptainer
+```
+3. **Bind paths that aren't auto-mounted.** `autoMounts` covers your home directory and the current working directory, but not everything — e.g. `/rs1` (our shared storage). If a process reads or writes there and the file "isn't found" inside the container despite existing on disk, that's almost always a missing bind, not a real missing file. Add it per-process:
+```groovy
+   process fastqc {
+       container '/usr/local/usrapps/brc/brc_modules/images/quay.io_biocontainers_fastqc:0.12.1--hdfd78af_0.sif'
+       containerOptions '--bind /rs1:/rs1'                   // this line
+       ...
+   }
+```
+
+4. **Symlinked inputs can fail silently inside the container.** (We did this on Day 1 and it **works on our modules too**). Nextflow normally stages inputs into `work/` as symlinks pointing back to the original files — fine for a native process, but a container can't follow a symlink that points *outside* its mounted paths, even with the right binds in place. The fix is `stageInMode`, which forces Nextflow to copy the file into `work/` instead of symlinking it:
+```groovy
+   process FASTQC {
+       container '/usr/local/usrapps/brc/brc_modules/images/quay.io_biocontainers_fastqc:0.12.1--hdfd78af_0.sif'
+       stageInMode 'copy'                   // this line
+       ...
+   }
+```
+   Costs a little extra disk and I/O per task, but it's the reliable fix when a process reports a missing input file that you can plainly see sitting in the directory it's staged from.
+:::
+
+
+**Quick diagnostic:** container job failing on a file that clearly exists?
+- `No such file or directory` for something outside your working directory → missing `--bind` (point 3).
+- Input file "not found" even though it's sitting right there in the process's own input directory → symlink staging issue, add `stageInMode 'copy'` (point 4).
+
+
+## 5. Running on SLURM
+
+Everything so far has run one task at a time on whatever node you happened to be on. That's fine for FastQC on one sample — not fine for a more demanding task, such as an assembly step across 40 samples. This section connects your pipeline to the actual scheduler the cluster runs on.
+
+### 5.1 The `executor` directive
+
+Nextflow doesn't submit jobs to SLURM by default — it runs tasks locally, one process execution at a time, same as everything you've done today. The `executor` setting tells Nextflow to hand each task off to SLURM instead:
+
+```groovy
+process.executor = 'slurm'
+```
+
+Once this is set, every task Nextflow runs — every sample through every process — becomes its own `sbatch` submission behind the scenes. You don't write `sbatch` scripts by hand for each task; Nextflow generates and submits them for you, one per process execution, using the resource directives you give it.
+
+### 5.2 Writing a SLURM profile
+
+You already used `profiles {}` in §4.3 to turn a container engine on without touching pipeline code. Same mechanism, different job: a SLURM profile bundles executor + resource defaults so you can switch between "run locally" and "run on the cluster" with one flag.
+
+```groovy
+// nextflow.config
+profiles {
+    slurm {
+        process.executor = 'slurm'
+        process.cpus      = 2
+        process.memory    = '4 GB'
+        process.time      = '1h'
+    }
+}
+```
+
+Run with `-profile slurm,apptainer` to combine both — profiles stack, so your container settings from §4 and your scheduler settings here apply together without redefining anything.
+
+
+### 5.3 Submitting: interactive session vs. `sbatch`-wrapped
+
+There are two ways to launch `nextflow run` itself, and they're not the same thing as the SLURM jobs Nextflow submits *for* your tasks (§5.1) — this trips people up, so it's worth being explicit:
+
+- **From an interactive session** (the same `srun` session from Day 1, §2 — same flags, no need to redo that here): you type `nextflow run main.nf -profile slurm` directly. Nextflow's own head process runs live in your terminal, submitting each task as a separate SLURM job as the pipeline progresses. Good for development and debugging — you see output immediately, `-resume` is easy to reach for.
+- **Wrapped in an `sbatch` script**: you submit the *head process itself* as a SLURM job, and it runs unattended:
+```bash
+  #!/bin/bash
+  #SBATCH --job-name=nf-head
+  #SBATCH --time=04:00:00
+  #SBATCH --cpus-per-task=1
+  #SBATCH --mem=2G
+
+  module load apptainer nextflow
+  nextflow run main.nf -profile slurm,apptainer -resume
+```
+  Good for anything long enough to outlast your terminal connection — the head process survives even if you log off, and each task it launches is still its own independent SLURM job.
+
+::: {.callout-important}
+The head process itself only needs to stay alive and track state — it's not doing the heavy computational work. Don't request assembly-sized resources (§5.5) for the wrapper job; a `nf-head` job requesting 8 CPUs and 32 GB is wasting an allocation while just watching other jobs run.
+:::
+
+
+### 5.5 Exercise: give assembly more resources than FastQC
+
+FastQC is light. Assembly is not. Requesting the same CPUs/memory for both wastes allocation on the light step and starves the heavy one. `withName` (or `withLabel`, if you've tagged processes with labels) lets you set resources per process instead of one blanket default.
+
+**Your 1st task:** add a `withName` block for your assembly process that requests more CPUs and memory than FastQC's defaults, then re-run with `-profile slurm` and confirm in the SLURM job log (`sacct -j <jobid>`) that the assembly task actually requested the resources you gave it.
+
+::: {.callout-tip collapse="true"}
+# Solution 1
+```groovy
+// nextflow.config
+process {
+    withName: 'FASTQC' {
+        cpus   = 1
+        memory = '2 GB'
+    }
+    withName: 'assembly' {
+        cpus   = 8
+        memory = '32 GB'
+        time   = '2h'
+    }
+}
+```
+::: {.callout-note}
+### Defaults vs. overrides: how `process.cpus` and `withName` interact
+
+The `process.cpus = 2` / `process.memory = '4 GB'` lines you wrote in §5.2 aren't a separate setting from the `withName` blocks — they're the **default** every process gets unless something more specific overrides it. Nextflow always prefers the most specific match: a `withName` block for a given process wins over the profile-wide default.
+
+So in the config above: `FASTQC` explicitly gets `cpus = 1, memory = '2 GB'` from its own `withName` block, `assembly` explicitly gets `cpus = 8, memory = '32 GB'`, and any *other* process in your pipeline without a `withName` entry falls back to the `process.cpus = 2, process.memory = '4 GB'` default. Nothing is added together or averaged — the more specific rule simply replaces the general one for that process.
+:::
+::: 
+
+
+**Your 2nd task:** inside the `slurm` profile you wrote in §5.2, add a `withName` block for your assembly process that requests more CPUs and memory than FastQC's defaults, then re-run with `-profile slurm` and confirm in the SLURM job log (`sacct -j <jobid>`) that the assembly task actually requested the resources you gave it.
+
+::: {.callout-tip collapse="true"}
+# Solution 2
+```groovy
+// nextflow.config
+profiles {
+    slurm {
+        process.executor = 'slurm'
+        process.queue     = 'normal'
+        process.cpus      = 2
+        process.memory    = '4 GB'
+        process.time      = '1h'
+
+        process {
+            withName: 'FASTQC' {
+                cpus   = 1
+                memory = '2 GB'
+            }
+            withName: 'assembly' {
+                cpus   = 8
+                memory = '32 GB'
+                time   = '2h'
+            }
+        }
+    }
+}
+```
+
+::: {.callout-note}
+### Why `withName` lives inside the `slurm` profile, not outside it
+
+You could technically put a `withName` block at the top level of `nextflow.config`, outside `profiles {}` entirely — but then it applies to **every** run, regardless of `-profile`. That means a local, non-SLURM run would still try to hand `assembly` 8 CPUs and 32 GB, even though nothing about `queue` or `executor` would apply outside the profile. You'd end up with SLURM-shaped resource requests running on your laptop or login node.
+
+Nesting `withName` inside `profiles { slurm { ... } }` scopes it correctly: these per-process resource rules only take effect when you actually run with `-profile slurm`. Anything SLURM-specific — resource sizing included — belongs inside the profile that turns SLURM on.
+:::
+:::
+
+## 6. Capstone: Assemble Your Reads
+
+This is where everything today comes together. You're extending the pipeline you already have — `fastqc → trim → fastqc(trimmed)` — with a 4th step: de novo assembly with MEGAHIT. When you're done, you'll have a real, if small, pipeline: FASTQC → trim → FASTQC → assemble, containerized, running on SLURM.
+
+
+### 6.1 Guided steps
+
+1. **Write the `megahit` process**, taking `trim.out` as input:
+```groovy
+   process megahit {
+       container '/usr/local/usrapps/brc/brc_modules/images/CONTAINER!!!!! FIXXX'
+       publishDir 'results/assembly', mode: 'copy'
+
+       input:
+       path reads
+
+       output:
+       path "megahit_out/final.contigs.fa"
+
+       script:
+       """
+       megahit -r ${reads} -o megahit_out
+       """
+   }
+```
+2. **Add it to your workflow block**, same chaining pattern from Day 1 §1 (`.out` from one process feeds the next):
+```groovy
+   workflow {
+       main:
+       reads_ch = Channel.fromPath('data/sample_*_*.fastq')
+
+       fastqc(reads_ch)
+       trim(reads_ch)
+       fastqc(trim.out)
+       megahit(trim.out)
+   }
+```
+3. **Confirm the container path is correct** for your account (§4.2.1–4.4) — this is the most common place to get stuck.
+4. **Run locally first**, no SLURM yet:
+```bash
+   nextflow run main.nf -profile apptainer
+```
+5. **Switch to the `slurm` profile** once the local run succeeds:
+```bash
+   nextflow run main.nf -profile slurm,apptainer
+```
+6. **Give `assembly` its own resource block** (you should already have done this in 5.5) in the `slurm` profile (§5.5) — assembly is memory-hungry, more so than `fastqc` or `trim`:
+```groovy
+   withName: 'assembly' {
+       cpus   = 8
+       memory = '32 GB'
+       time   = '2h'
+   }
+```
+
+::: {.callout-tip}
+Work at your own pace from here. If you get a container or staging error, check §4.4's diagnostic table before asking — most issues at this stage are a missing bind path or a missing `stageInMode 'copy'`, not a new problem.
+:::
+
+### 6.2 Stretch task: aggregate QC with MultiQC
+
+If you finish early: add a process, `multiqc`, that gathers every FastQC and Trimmomatic report into one summary — the same `.collect()` pattern from Day 1 §3.3 (wait for every upstream item, then emit one combined item).
+
+```groovy
+process multiqc {
+    container '/usr/local/usrapps/brc/brc_modules/images/quay.io_biocontainers_multiqc:1.21--pyhdfd78af_0.sif'
+    publishDir 'results/multiqc', mode: 'copy'
+
+    input:
+    path reports
+
+    output:
+    path "multiqc_report.html"
+
+    script:
+    """
+    multiqc .
+    """
+}
+```
+
+**Your task:** figure out how to combine the outputs of both `fastqc` calls and `trim` into a single channel `multiqc` can consume — you'll need `.collect()` and possibly `.mix()` (Day 1, §2's branching-vs-chaining callout mentions `.mix()` in passing; this is where you actually need it).
+
+
+### 6.3 Another (ADVANCED) stretch task: align reads with BWA to host genome and extract unaligned reads with SAMtools
+
+This task introduces a few things we haven't used yet today: a **process with more than one input** (reads *and* a reference genome), a **channel for a reference file** rather than sample data, and a cluster-specific constraint around **downloading things ahead of time** since compute nodes have no internet access. Each is explained inline as it comes up.
+
+A common real-world step before assembly: align your trimmed reads against a host or contaminant genome (e.g. corn, human) you want to remove, then keep only the reads that *didn't* align — those are the ones you actually assemble. This is a two-tool step (BWA, then SAMtools), and it changes what feeds `assembly` — instead of `trim.out` going straight in, it'll go through this filtering step first.
+
+
+::: {.callout-important}
+### When compute nodes have no internet access (NCSU HPC)
+
+Every reference we've used so far has already been on disk in `data/` — but a host genome isn't something we've provided, and compute nodes on our cluster **can't reach the internet** to download one mid-job. If a task tries to fetch a reference from NCBI/Ensembl/etc. while running on a compute node, it will just hang or fail with a connection error that has nothing to do with your Nextflow code.
+
+Anything your pipeline needs from outside the cluster — reference genomes, databases, container images not already in our shared library — has to be downloaded **ahead of time**, from the login node (which does have internet access), and referenced by its path on disk. This is why our FastQC/Trimmomatic/MEGAHIT containers all point at pre-pulled `.sif` files in `/usr/local/usrapps/brc/brc_modules/images/` rather than pulling `docker://...` live (§4.2.1) — same reasoning applies to reference genomes.
+
+For this task, download your host genome from the login node first:
+```bash
+# from the login node, NOT a compute node
+wget -O host_genome.fa.gz https://example.com/path/to/host_genome.fa.gz
+gunzip host_genome.fa.gz
+```
+Then reference `host_genome.fa` by its path in the config below — don't try to download it inside a process.
+:::
+
+### A process with two inputs. 
+Every process you've written today has taken a single input — one file, one channel. `align_host` needs two: the reads *and* the reference genome to align against. Nextflow processes can take multiple inputs; just list them as separate lines in the `input:` block, and they get filled positionally by whatever you pass in when you call the process:
+
+```groovy
+process align_host {
+    container '/usr/local/usrapps/brc/brc_modules/images/quay.io_biocontainers_bwa:0.7.17--hed695b0_7.sif'
+    stageInMode 'copy'
+
+    input:
+    path reads
+    path reference
+
+    output:
+    path "aligned.sam"
+
+    script:
+    """
+    bwa index ${reference}
+    bwa mem ${reference} ${reads} > aligned.sam
+    """
+}
+```
+
+Then, extract only the reads that *didn't* align. `samtools view -f 4` filters for unmapped reads (the `4` flag in a SAM/BAM file marks "read did not align"), and `samtools fastq` converts that back into FASTQ format that `assembly` can consume:
+
+```groovy
+process extract_unaligned {
+    container '/usr/local/usrapps/brc/brc_modules/images/quay.io_biocontainers_samtools:1.19--h50ea8bc_0.sif'
+    stageInMode 'copy'
+    publishDir 'results/host_removed', mode: 'copy'
+
+    input:
+    path sam
+
+    output:
+    path "unaligned.fastq"
+
+    script:
+    """
+    samtools view -f 4 -b ${sam} | samtools fastq - > unaligned.fastq
+    """
+}
+```
+
+### A channel for the reference genome.
+`align_host` needs a second channel to supply `reference` — same `Channel.fromPath` factory you already know from Day 1 §2.1, just pointed at one file instead of a glob matching many:
+
+```groovy
+host_reference_ch = Channel.fromPath('/path/to/host_genome.fa')
+```
+
+Since this channel only ever emits one item (the reference genome doesn't change per-sample the way reads do), it gets reused across every task `align_host` runs — Nextflow pairs it with each incoming read file automatically.
+
+**Your task:**
+
+1. Download a host genome from the login node (see the callout above) and build the `host_reference_ch` channel pointing at it.
+2. Add both processes to your pipeline, chained together — `align_host`'s output feeds `extract_unaligned`.
+3. Rewire `assembly` to take `extract_unaligned.out` instead of `trim.out` directly:
+```groovy
+   trim(reads_ch)
+   align_host(trim.out, host_reference_ch)
+   extract_unaligned(align_host.out)
+   assembly(extract_unaligned.out)
+```
+
+::: {.callout-warning}
+`-f 4` is a SAM flag filter, not something Nextflow-specific — worth a quick `samtools flags` or a peek at the [SAM spec](https://samtools.github.io/hts-specs/SAMv1.pdf) if flag values are new to you. Flag `4` means "segment unmapped"; combining flags (e.g. filtering out both unmapped reads and their mapped mates) uses different flag arithmetic, out of scope for today but worth knowing exists.
+:::
