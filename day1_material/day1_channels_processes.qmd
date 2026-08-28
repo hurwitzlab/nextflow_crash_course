@@ -261,6 +261,10 @@ Here `module` works because NCSU HPC (Hazel) has `fastqc/0.12.1` available as an
 #### 2.2.1. Launch the workflow and monitor execution
 
 ```bash
+# just in case you haven't done the set up day load nextflow:
+module load nextflow/26.04.3 
+
+# run the nextflow pipeline
 nextflow run scripts/fastqc_example_1.nf
 ```
 You should get something like the following: 
@@ -445,7 +449,7 @@ instead of `sample_001_R1.fastq`.
 
 Run your modified script with:
 ```bash
-nextflow run fastqc_solution.nf
+nextflow run path/to/fastqc_solution.nf
 ```
 
 Take a few minutes to try this yourself before checking the solution below.
@@ -537,6 +541,8 @@ reads_ch = Channel.fromPath('data/sample_*_*.fastq')
 — was enough to go from "process one file" to "process every file in
 parallel." You didn't add a loop. You changed what gets placed on the belt.
 
+
+
 ::: {.callout-tip}
 If you're coming from bash, the instinct is to reach for a `for` loop
 whenever you want to do something to multiple files. But a bash loop doesn't
@@ -552,7 +558,7 @@ part.
 :::
 
 ## 2. Channel Factories: 
-A **channel factory** is what *creates* a channel in the first place — it's how data gets onto the conveyor belt to begin with. In other words, channel factories take something outside Nextflow (a glob pattern matching files on disk) and turn it into a channel of items.
+A **channel factory** is what *creates* a channel in the first place — it's how data gets onto the conveyor belt to begin with. In other words, channel factories take something outside Nextflow (a glob pattern matching files on disk) and turn it into a channel of items. More on channel factories [here](https://docs.seqera.io/nextflow/reference/stdlib-namespaces/channel).
 
 ### 2.1. `Channel.fromPath`: one file (or many) per item
 
@@ -604,7 +610,15 @@ diving into the exercise.
 :::
 
 ## 3. Channel Operators
-A **channel operator** *transforms or inspects* a channel that already exists — it doesn't create data from scratch, it takes items already on the belt and does something to them as they pass by. `.view()`, `.map()`, and `.collect()` (below) are all operators: they take an existing channel and either peek inside it, reshape its items, or regroup them.
+A **channel operator** *transforms or inspects* a channel that already exists — it doesn't create data from scratch, it takes items already on the belt and does something to them as they pass by. In other words, operators take an existing channel and perform some action on it. There are many operators in Nextflow, grouped in categories based on their function:
+
+- **Filtering Operators**: Reduce or select elements based on conditions. Examples include `filter`, `first`, `last`, and `unique`.
+- **Transforming Operators**: Modify the data inside a channel. Common examples are `map`, `flatmap`, `flatten`, and `collect`.
+- **Combining Operators**: Join or merge multiple channels together. Examples include `join`, `combine`, `merge`, and `groupTuple`.
+- **Splitting Operators**: Break complex data structures or files into smaller chunks, such as `splitText` or `splitCsv`.
+- **Maths Operators**: Perform basic numerical calculations on channel values like `count`, `min`, `max`, and `sum`.
+
+More on channel operators [here](https://docs.seqera.io/nextflow/reference/operator). We are going to look at 3 of the most used ones: `.view()`, `.map()`, and `.collect()`.
 
 ### 3.1. Peeking inside a channel: `.view()`
 
@@ -614,6 +628,7 @@ them — extremely useful for debugging and for building an intuition for
 what shape your data is in.
 
 ```groovy
+// channel_view.nf
 Channel
     .fromFilePairs('data/sample_*_R{1,2}.fastq')
     .view()
@@ -642,6 +657,7 @@ For example, say you only want the sample ID from each pair, discarding the
 file paths:
 
 ```groovy
+// channel_map.nf
 Channel
     .fromFilePairs('data/sample_*_R{1,2}.fastq')
     .map { sample_id, files -> sample_id }
@@ -665,6 +681,7 @@ individually, you might want a single downstream step (like MultiQC) that
 summarizes all reports together.
 
 ```groovy
+// channel_collect.nf
 Channel
     .fromPath('data/sample_*_R1.fastq')
     .collect()
@@ -688,47 +705,98 @@ finishes — a useful thing to keep in mind when thinking about where
 parallelism starts and stops in your pipeline.
 :::
 
-## 4. Exercise: build a channel from paired-end data
+## 4. Exercise: what happens when the channel shape changes?
 
-Using the toy paired-end dataset in `data/`, do the following:
+You've been running `fastqc` on single files with `Channel.fromPath`. Now swap
+in the paired-end channel from the previous section — same process, no
+changes — and run it:
 
-1. Build a channel with `Channel.fromFilePairs` that correctly groups each
-   sample's forward and reverse read files together.
-2. Add `.view()` to confirm the tuple structure looks correct — check that
-   each sample ID is paired with exactly two files, and that no files from
-   different samples get mixed together.
-3. Using `.map()`, transform the channel so it emits *just* the sample IDs,
-   discarding the file paths.
+```groovy
+reads_ch = Channel.fromFilePairs('data/sample_*_R{1,2}.fastq')
+fastqc(reads_ch)
+```
+What do you see?
 
-Take a few minutes to work through this before checking the solution below.
+::: {.callout-tip collapse="true"}
+## What I see
+It crashes! With something like: 
+
+```
+ERROR ~ Error executing process > 'fastqc (1)'
+
+Caused by:
+  Not a valid path value: 'sample_003'
+
+
+
+Tip: you can try to figure out what's wrong by changing to the process work dir and showing the script file named `.command.sh`
+
+ -- Check '.nextflow.log' file for details
+```
+
+Before checking the solution, look at the error and try to answer: what type of value is the process actually receiving, and what does the `path reads` input declaration assume it's receiving instead?
+
+::: {.callout-tip }
+You can `cd` into the failed task's work directory and check `.command.sh` —
+does it look like it ran on a sample ID, or on files?
+
+Another way to trouble shoot this is adding the .view() operator to your channel like we learned above and seeing what it the shape of your output. Compare that with the shape of the input that the `fastqc` input is expecting.
+:::
+:::
 
 ::: {.callout-tip collapse="true"}
 ## Solution
 
-```groovy
-read_pairs_ch = Channel
-    .fromFilePairs('data/sample_*_R{1,2}.fastq')
-    .view()
+`fromFilePairs` emits `[sample_id, [file1, file2]]` — a tuple, not a bare
+path. The process only declares one input (`path reads`), so Nextflow has
+no slot for the sample ID and tries to treat it as a path, hence:
 
-sample_ids_ch = read_pairs_ch
-    .map { sample_id, files -> sample_id }
-    .view()
+```
+    Not a valid path value: 'sample_003'
 ```
 
-Running this should print each pair first (from the first `.view()`), then
-just the sample IDs (from the second):
-```
-[sample1, [data/sample_001_R1.fastq, data/sample_001_R2.fastq]]
-[sample2, [data/sample_002_R1.fastq, data/sample_002_R2.fastq]]
-sample1
-sample2
+The fix is to **make the input declaration match the channel**'s actual shape:
+
+``` groovy
+// fastqc_solution.nf
+    input:
+    tuple val(sample_id), path(reads)
+
+    output:
+    tuple val(sample_id), path("*_fastqc.{html,zip}")
 ```
 
-The key insight here: `fromFilePairs` does the grouping work for you, so you
-never have to manually match up forward/reverse files by hand the way you
-might in a bash script. `.map()` then lets you reshape that grouped data
-into whatever shape your next process actually needs.
+Now we should get an output of 3 tasks instead of 6: 
+
+```
+executor >  local (3)
+[57/da6072] process > fastqc (1) [100%] 3 of 3 ✔
+```
+::: {.callout-note}
+### Same fan-out rule, different grouping
+
+Running `fastqc_example_3.nf` on 6 individual files with
+`Channel.fromPath` produced 6 tasks — one per file:
+
+    executor >  local (6)
+    [e5/f4b3d3] process > fastqc (6) [100%] 6 of 6 ✔
+
+Now run the paired-end solution above, on the same 6 underlying files,
+but grouped with `Channel.fromFilePairs`:
+
+    executor >  local (3)
+    [57/da6072] process > fastqc (1) [100%] 3 of 3 ✔
+
+Same files, same "one task per channel item" rule from §1.1 — but only
+3 tasks instead of 6. `fromFilePairs` doesn't emit one item per file; it
+emits one item per **sample**, with both reads already bundled together.
+Fewer emissions means fewer parallel tasks. What changed isn't the
+fan-out mechanism — it's what counts as one item.
 :::
+
+:::
+
+
 
 ---
 
@@ -782,9 +850,10 @@ We'll build on `fastqc_example_3.nf`. Alongside the existing `fastqc` process,
 add a new one for trimming with Trimmomatic:
 
 ```groovy
+// fastqc_trimmomatic.nf
 process trim {
 
-    module 'trimmomatic/0.39'
+    module 'trimmomatic/0.40'
     stageInMode 'copy'
     publishDir 'trimmed', mode: 'copy'
 
@@ -816,6 +885,7 @@ A few things to notice, since this looks almost identical to `fastqc`:
 Now wire both processes to the same input channel in the `workflow` block:
 
 ```groovy
+// fastqc_trimmomatic.nf
 workflow {
 
     main:
@@ -829,14 +899,14 @@ workflow {
 Run it:
 
 ```bash
-nextflow run fastqc_example_3.nf
+nextflow run scripts/fastqc_example_3.nf
 ```
 
 **Command output:**
 ```
-executor > local (6)
-[a1/2b3c4d] fastqc | 3 of 3 ✔
-[e5/6f7a8b] trim | 3 of 3 ✔
+executor >  local (12)
+[b4/24bb55] process > fastqc (5) [100%] 6 of 6 ✔
+[64/53358c] process > trim (6)   [100%] 6 of 6 ✔
 ```
 
 You should now have two output folders, `fastqc/` and `trimmed/`, each
@@ -849,26 +919,20 @@ runs fine on its own — confirming that these two processes really are
 independent branches right now, not a chain.
 :::
 
+
 ## 3. Exercise: add a third step — FASTQC on trimmed reads
 
 Now let's make this a genuine 3-step **linear** pipeline by adding a check on
 the *trimmed* reads: does trimming actually improve quality?
 
-This is where real chaining comes in — you need `trim`'s output, not the
-original `reads_ch`, as the input to this second FastQC call.
-
-Try it yourself first:
+Try the obvious thing first:
 
 1. Call `fastqc` a second time in the workflow block, passing it `trim.out`
    instead of `reads_ch`.
-2. Run the pipeline and confirm you now get **two sets** of FastQC reports
-   in `fastqc/`: one for raw reads, one for trimmed reads (the trimmed ones
-   will be named `trimmed_sample*_fastqc.html`, so nothing gets overwritten).
-
-::: {.callout-tip collapse="true"}
-## Solution
+2. Run the pipeline.
 
 ```groovy
+// workflow_solution_1.nf
 workflow {
 
     main:
@@ -880,56 +944,41 @@ workflow {
 }
 ```
 
-**Command output:**
+You'll get this: 
+
 ```
-results/
-├── qc_raw/
-├── trimmed/
-└── qc_trimmed/
+[-        ] process > fastqc -
+[-        ] process > trim   -
+Process 'fastqc' has been already used -- If you need to reuse the same component, include it with a different name or include it in a different workflow context
+
+ -- Check script 'scripts/workflow_solution.nf' at line: 47 or see '.nextflow.log' file for more details
 ```
 
 
-Notice `fastqc` now shows `6 of 6` — it ran once per raw file **and** once
-per trimmed file, because it was called twice in the workflow block, each
-time with a different upstream channel. The *same process definition* is
-reused for both; only the channel feeding it changed.
 
-This is the payoff of the process/channel separation introduced yesterday:
-you didn't need a second, near-duplicate `fastqc_trimmed` process just
-because the input source changed.
-:::
-
-::: {.callout-warning}
-Calling `fastqc(reads_ch)` and `fastqc(trim.out)` in the same workflow block
-works because they're two **separate calls** to the same process — Nextflow
-treats each call as its own set of tasks. This is different from trying to
-feed both channels into a *single* call, which would require combining them
-into one channel first (e.g. with `.mix()`) — not something we need here,
-but worth knowing the distinction exists.
-:::
-
-## 4. Stretch task (for faster participants): organize outputs into named folders
-
-Right now, both `fastqc` calls dump into the same `fastqc/` folder, and
-`trim` dumps into `trimmed/`. That's manageable for three files, but real
-pipelines with many steps get messy fast if everything lands in flat,
-generically-named directories.
-
-Try reorganizing so you end up with a clear, self-documenting output
-structure, e.g.:
 
 ::: {.callout-tip collapse="true"}
-## Solution (straightforward version)
+## Why this happens
 
-The simplest approach, using only what we've covered so far, is to give
-`fastqc` two named copies — one per stage — each with its own `publishDir`:
+In DSL2, a process can only be **invoked once per workflow**. It doesn't
+matter that you're feeding it a different channel — Nextflow tracks calls
+by process name, and `fastqc` was already called on line one. This is
+different from the channel-shape problems you hit in §2; this is a rule
+about how many times a given process name can appear in a `workflow {}`
+block, full stop.
+
+The real fix: give the second call its own process name.
 
 ```groovy
+#!/usr/bin/env nextflow
+
+// workflow_solution_2.nf
+
 process fastqc_raw {
 
     module 'fastqc/0.12.1'
     stageInMode 'copy'
-    publishDir 'results/qc_raw', mode: 'copy'
+    publishDir 'results/qc_raw', mode: 'copy'       //this line
 
     input:
     path reads
@@ -943,11 +992,11 @@ process fastqc_raw {
     """
 }
 
-process fastqc_trimmed {
+process fastqc_trimmed {                            //this new process
 
     module 'fastqc/0.12.1'
     stageInMode 'copy'
-    publishDir 'results/qc_trimmed', mode: 'copy'
+    publishDir 'results/qc_trimmed', mode: 'copy'   //this line
 
     input:
     path reads
@@ -963,9 +1012,9 @@ process fastqc_trimmed {
 
 process trim {
 
-    module 'trimmomatic/0.39'
+    module 'trimmomatic/0.40'
     stageInMode 'copy'
-    publishDir 'results/trimmed', mode: 'copy'
+    publishDir 'results/trimmed', mode: 'copy'       //this line
 
     input:
     path reads
@@ -994,6 +1043,25 @@ workflow {
 This duplicates the process body, which isn't ideal — but it uses nothing
 beyond what's already in your toolkit, and for a 1.5-day workshop that's a
 completely reasonable trade-off.
+
+Your output should look like something like this: 
+
+``` 
+executor >  local (18)
+[8c/a16e15] process > fastqc_raw (6)     [100%] 6 of 6 ✔
+[83/34b1f9] process > trim (5)           [100%] 6 of 6 ✔
+[65/e5cc65] process > fastqc_trimmed (6) [100%] 6 of 6 ✔
+```
+
+And your `results/` directory will have this structure: 
+
+```
+results/
+├── qc_raw/
+├── trimmed/
+└── qc_trimmed/
+```
+
 :::
 
 
@@ -1005,3 +1073,126 @@ to leave with: **channels decide the shape of the pipeline; processes stay
 generic.** Tomorrow we'll build on this by parameterizing pipelines from the
 command line and introducing resume/caching so re-runs don't redo finished
 work.
+
+
+## Stretch task: paired-end reads (try this at home if we're short on time)
+
+Everything today used `Channel.fromPath` — one file per emission. Real
+paired-end data usually needs `Channel.fromFilePairs` instead, which you
+already built back in §2. This task asks you to rebuild today's pipeline
+around that.
+
+**Tier 1 — reuse what you already fixed.** Swap `reads_ch` to
+`Channel.fromFilePairs(...)`, and update `fastqc_raw`/`fastqc_trimmed` to
+take the tuple input, the same fix from §2's crash exercise:
+
+```groovy
+input:
+tuple val(sample_id), path(reads)
+
+output:
+tuple val(sample_id), path("*_fastqc.{html,zip}")
+```
+
+Confirm you get 3 tasks per FastQC step instead of 6 — same as the callout
+from §2, just inside a full pipeline this time.
+
+```
+executor >  local (9)
+[de/ddd301] process > fastqc_raw (1)     [100%] 3 of 3 ✔
+[fb/a9ba71] process > trim (1)           [100%] 3 of 3 ✔
+[fb/3722cb] process > fastqc_trimmed (2) [100%] 3 of 3 ✔
+```
+
+**Tier 2 — go all the way: paired-end trimming.** `trim` is harder than it
+looks with paired data. Trimmomatic's `PE` mode takes *two* input files and
+produces *four* outputs — forward paired, forward unpaired, reverse paired,
+reverse unpaired — not the single in/out you used with `SE`. You'll need to:
+
+- Look up Trimmomatic's `PE` command syntax (not covered in these
+  materials — this is the "go read the docs" part of a stretch task)
+- Decide what your process's `output:` block needs to declare to capture
+  all four files
+- Decide which of the four outputs actually feeds `fastqc_trimmed`
+  afterward (hint: it's the two *paired* outputs, not the unpaired ones)
+
+This one's open-ended on purpose — there's more than one reasonable way to
+structure the outputs. If you get stuck on the tuple/channel side rather
+than the Trimmomatic side, the fix is the same pattern as Tier 1.
+
+::: {.callout-tip collapse="true"}
+## Solution
+
+```groovy
+#!/usr/bin/env nextflow
+
+// workflow_stretch.nf
+
+process fastqc_raw {
+    module 'fastqc/0.12.1'
+    stageInMode 'copy'
+    publishDir 'results/qc_raw', mode: 'copy'
+
+    input:
+    tuple val(sample_id), path(reads)
+
+    output:
+    tuple val(sample_id), path("*_fastqc.{html,zip}")
+
+    script:
+    """
+    fastqc -t 4 ${reads}
+    """
+}
+
+process trim {
+    module 'trimmomatic/0.40'
+    stageInMode 'copy'
+    publishDir 'results/trimmed', mode: 'copy'
+
+    input:
+    tuple val(sample_id), path(reads)
+
+    output:
+    tuple val(sample_id),
+          path("${sample_id}_R1_paired.fastq"),
+          path("${sample_id}_R2_paired.fastq")
+
+    script:
+    """
+    trimmomatic PE -threads 4 \\
+        ${reads[0]} ${reads[1]} \\
+        ${sample_id}_R1_paired.fastq ${sample_id}_R1_unpaired.fastq \\
+        ${sample_id}_R2_paired.fastq ${sample_id}_R2_unpaired.fastq \\
+        SLIDINGWINDOW:4:20 MINLEN:36
+    """
+}
+
+process fastqc_trimmed {
+    module 'fastqc/0.12.1'
+    stageInMode 'copy'
+    publishDir 'results/qc_trimmed', mode: 'copy'
+
+    input:
+    tuple val(sample_id), path(r1_paired), path(r2_paired)
+
+    output:
+    tuple val(sample_id), path("*_fastqc.{html,zip}")
+
+    script:
+    """
+    fastqc -t 4 ${r1_paired} ${r2_paired}
+    """
+}
+
+workflow {
+
+    main:
+    read_pairs_ch = Channel.fromFilePairs('data/sample_*_R{1,2}.fastq')
+
+    fastqc_raw(read_pairs_ch)
+    trim(read_pairs_ch)
+    fastqc_trimmed(trim.out)
+}
+
+```

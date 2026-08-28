@@ -1,5 +1,5 @@
 #!/usr/bin/env nextflow
-process fastqc{
+process fastqc {
 
     module 'fastqc/0.12.1'
     stageInMode 'copy'
@@ -17,11 +17,12 @@ process fastqc{
     """
 }
 
+
 process trim {
 
     module 'trimmomatic/0.40'
     stageInMode 'copy'
-    publishDir 'trimmed', mode: 'copy'
+    publishDir 'results/trimmed', mode: 'copy'
 
     input:
     path reads
@@ -43,5 +44,5 @@ workflow {
 
     fastqc(reads_ch)
     trim(reads_ch)
-
+    fastqc(trim.out)
 }

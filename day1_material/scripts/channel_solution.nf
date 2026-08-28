@@ -10,10 +10,10 @@ process fastqc {
     publishDir 'fastqc', mode: 'copy'
 
     input:
-    path reads
+    tuple val(sample_id), path(reads)
 
     output:
-    path "*_fastqc.{html,zip}"
+    tuple val(sample_id), path("*_fastqc.{html,zip}")
 
     script:
     """
@@ -24,12 +24,9 @@ process fastqc {
 workflow {
 
     main:
-    // channel: grab a different fastq file
-    reads_ch = Channel.fromPath('data/sample_002_R1.fastq')
-    
-    // scaling up from one sample to many: 
-    //reads_ch = Channel.fromPath('data/sample_*_*.fastq')
+    // channel: paired fastq files
+    reads_ch = Channel.fromFilePairs('data/sample_*_R{1,2}.fastq')
 
-    // run FASTQC
+    // run fastqc
     fastqc(reads_ch)
 }

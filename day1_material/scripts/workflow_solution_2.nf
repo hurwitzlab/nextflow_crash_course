@@ -1,9 +1,28 @@
 #!/usr/bin/env nextflow
-process fastqc{
+
+process fastqc_raw {
 
     module 'fastqc/0.12.1'
     stageInMode 'copy'
-    publishDir 'fastqc', mode: 'copy'
+    publishDir 'results/qc_raw', mode: 'copy'
+
+    input:
+    path reads
+
+    output:
+    path "*_fastqc.{html,zip}"
+
+    script:
+    """
+    fastqc -t 4 ${reads}
+    """
+}
+
+process fastqc_trimmed {
+
+    module 'fastqc/0.12.1'
+    stageInMode 'copy'
+    publishDir 'results/qc_trimmed', mode: 'copy'
 
     input:
     path reads
@@ -21,7 +40,7 @@ process trim {
 
     module 'trimmomatic/0.40'
     stageInMode 'copy'
-    publishDir 'trimmed', mode: 'copy'
+    publishDir 'results/trimmed', mode: 'copy'
 
     input:
     path reads
@@ -41,7 +60,7 @@ workflow {
     main:
     reads_ch = Channel.fromPath('data/sample_*_*.fastq')
 
-    fastqc(reads_ch)
+    fastqc_raw(reads_ch)
     trim(reads_ch)
-
+    fastqc_trimmed(trim.out)
 }
