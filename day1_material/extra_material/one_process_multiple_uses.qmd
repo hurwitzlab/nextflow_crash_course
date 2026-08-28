@@ -1,0 +1,193 @@
+---
+title: "Beyond the Workshop: Other Ways to Organize QC Outputs by Stage"
+author: "Mery Touceda-Suárez"
+format:
+  html:
+    toc: true
+    code-overflow: wrap
+---
+
+::: {.callout-note}
+## This section is optional
+
+Everything here goes beyond what we covered live. In the workshop, you
+organized raw vs. trimmed FastQC outputs by writing two separate processes
+(`fastqc_raw` and `fastqc_trimmed`). That solution works and uses nothing
+beyond what you already know — this page is for anyone curious about how a
+more experienced Nextflow user might solve the same problem with fewer
+lines of duplicated code.
+:::
+
+## Recap: the workshop solution
+
+In Day 1, you had two processes with identical bodies, differing only in
+`publishDir`:
+
+```groovy
+process fastqc_raw {
+    module 'fastqc/0.12.1'
+    stageInMode 'copy'
+    publishDir 'results/qc_raw', mode: 'copy'
+
+    input:
+    path reads
+
+    output:
+    path "*_fastqc.{html,zip}"
+
+    script:
+    """
+    fastqc -t 4 ${reads}
+    """
+}
+
+process fastqc_trimmed {
+    module 'fastqc/0.12.1'
+    stageInMode 'copy'
+    publishDir 'results/qc_trimmed', mode: 'copy'
+
+    input:
+    path reads
+
+    output:
+    path "*_fastqc.{html,zip}"
+
+    script:
+    """
+    fastqc -t 4 ${reads}
+    """
+}
+```
+
+This was the right call for the workshop: it needed nothing you hadn't
+already learned. But it does mean maintaining two copies of the same
+logic — if you ever changed the FastQC command, you'd need to change it in
+two places. Below are two ways to avoid that duplication.
+
+## Option A: tag, merge, and let `publishDir` branch at runtime
+
+Instead of two processes, you can carry a small "which stage is this"
+label alongside each file through the channel, merge both stages into one
+channel, and let a single process branch its output directory based on
+that label.
+
+This uses three ideas that weren't covered in the workshop:
+
+- **`.map()` to attach a tag** to each file as it enters the channel
+- **`.mix()` to merge two channels** into one, so a single process call can
+  handle both stages
+- **A dynamic `publishDir`** — instead of a fixed string, `publishDir` can
+  take a closure that's evaluated separately for each task
+
+```groovy
+process fastqc {
+    module 'fastqc/0.12.1'
+    stageInMode 'copy'
+    publishDir { "results/qc_${stage}" }, mode: 'copy'
+
+    input:
+    tuple val(stage), path(reads)
+
+    output:
+    path "*_fastqc.{html,zip}"
+
+    script:
+    """
+    fastqc -t 4 ${reads}
+    """
+}
+
+workflow {
+    main:
+    reads_ch = Channel.fromPath('data/sample_*_*.fastq')
+
+    raw_tagged     = reads_ch.map { file -> tuple('raw', file) }
+    trimmed_tagged = trim(reads_ch).map { file -> tuple('trimmed', file) }
+
+    fastqc(raw_tagged.mix(trimmed_tagged))
+}
+```
+
+One process, called once. The `{ "results/qc_${stage}" }` syntax is a
+closure — Nextflow evaluates it separately for every task, using that
+task's own `stage` value, rather than treating `publishDir` as one fixed
+path shared by every task.
+
+::: {.callout-tip collapse="true"}
+## Why not teach this in the workshop?
+
+It stacks three unfamiliar ideas — tagging, merging, and dynamic
+directories — into a single example. Any one of them on its own is a
+reasonable next step after Day 1; all three at once is a lot to absorb in
+a stretch task with no lecture time behind it. This page exists so you can
+come back to it once the individual pieces feel more familiar.
+:::
+
+## Option B: one process body, reused under two names
+
+Nextflow has a mechanism for exactly this situation: pulling a process out
+into its own file (a *module*) and importing it more than once under
+different aliases. This is the direction Day 2's `include` syntax
+material is building toward, so if you've made it that far, this will look
+familiar.
+
+`modules/fastqc.nf`:
+
+```groovy
+process fastqc {
+    module 'fastqc/0.12.1'
+    stageInMode 'copy'
+
+    input:
+    path reads
+
+    output:
+    path "*_fastqc.{html,zip}"
+
+    script:
+    """
+    fastqc -t 4 ${reads}
+    """
+}
+```
+
+Main workflow file:
+
+```groovy
+include { fastqc as fastqc_raw     } from './modules/fastqc.nf'
+include { fastqc as fastqc_trimmed } from './modules/fastqc.nf'
+
+workflow {
+    main:
+    reads_ch = Channel.fromPath('data/sample_*_*.fastq')
+
+    fastqc_raw(reads_ch)
+    trim(reads_ch)
+    fastqc_trimmed(trim.out)
+}
+```
+
+The process body lives in exactly one place. Each `include` line gives it
+a different name, so you can call it twice in the same workflow — solving
+the "process already used" error from a different angle than either the
+workshop fix or Option A.
+
+Note that this version doesn't include separate `publishDir` values — as
+written, both aliases would publish to whatever `publishDir` is set inside
+`modules/fastqc.nf`, which means you'd still need a small tweak (a
+`params`-driven path, or one of the approaches above) if you want raw and
+trimmed reports to land in different folders. This example is here to show
+*how process reuse works*, not as a complete drop-in replacement for the
+workshop solution.
+
+## Comparing the three approaches
+
+| Approach | New concepts required | Process duplication | Where it's covered |
+|---|---|---|---|
+| Two named processes (workshop) | None | Yes — full body duplicated | Day 1 |
+| Tag + `.mix()` + dynamic `publishDir` | `.map()`, `.mix()`, dynamic directives | No | This page only |
+| `include ... as` aliasing | Modules, `include` syntax | No | Day 2 |
+
+There's no single "correct" answer among these — which one is worth using
+depends on how many times you'd otherwise duplicate a process body, and
+how much of the surrounding syntax you already have available.
