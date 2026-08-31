@@ -172,22 +172,4 @@ a different name, so you can call it twice in the same workflow — solving
 the "process already used" error from a different angle than either the
 workshop fix or Option A.
 
-Note that this version doesn't include separate `publishDir` values — as
-written, both aliases would publish to whatever `publishDir` is set inside
-`modules/fastqc.nf`, which means you'd still need a small tweak (a
-`params`-driven path, or one of the approaches above) if you want raw and
-trimmed reports to land in different folders. This example is here to show
-*how process reuse works*, not as a complete drop-in replacement for the
-workshop solution.
 
-## Comparing the three approaches
-
-| Approach | New concepts required | Process duplication | Where it's covered |
-|---|---|---|---|
-| Two named processes (workshop) | None | Yes — full body duplicated | Day 1 |
-| Tag + `.mix()` + dynamic `publishDir` | `.map()`, `.mix()`, dynamic directives | No | This page only |
-| `include ... as` aliasing | Modules, `include` syntax | No | Day 2 |
-
-There's no single "correct" answer among these — which one is worth using
-depends on how many times you'd otherwise duplicate a process body, and
-how much of the surrounding syntax you already have available.

@@ -1,6 +1,6 @@
 ---
-title: "Day 1. Foundations: Thinking in Channels and Processes"
-subtitle: "Inspired in Hello Nextflow by Seqera"
+title: "Day 2. From Pipeline to Production"
+subtitle: ""
 author:
   - name: "María (Mery) Touceda-Suárez"
     affiliations:
@@ -32,6 +32,11 @@ execute:
 ---
 # 1. Setting up
 
+```bash
+cd path/to/workshop/repo/day2_material
+```
+
+
 # 2. Making your nextflow workflow configurable
 
 Yesterday you built a working 3-step pipeline — but every path is hardcoded: `data/sample_*_*.fastq` is baked into the script, and if a labmate wanted to run this on their data, they'd need to open the file and edit it by hand. That's fine for a workshop. It's not fine for a pipeline you intend to reuse, share, or hand off. This block is about closing that gap: turning "a script that works for me" into "a pipeline other people can run."
@@ -44,18 +49,88 @@ At the top of your final script from yesterday (`fastqc_example_3.nf`) you can a
 ```groovy
 params.input      = 'data/sample_*_*.fastq'
 params.outdir     = 'results'
-params.genome     = 'ref/genome.fa'
 ```
 
-Inside the workflow block, you swap the hardcoded string for the parameter: 
+Inside the workflow block, you swap the hardcoded string for the parameter (see `scripts/fastc_trimmomatic_params.nf`) .
+
+::: {.callout-tip collapse="true"}
+# fastqc_trimmomatic_params.nf
 
 ```groovy
+#!/usr/bin/env nextflow
+
+params.input      = 'data/sample_*_*.fastq'
+params.outdir     = 'results'
+
+process fastqc_raw {
+
+    module 'fastqc/0.12.1'
+    stageInMode 'copy'
+    publishDir 'params.outdir/qc_raw', mode: 'copy'
+
+    input:
+    path reads
+
+    output:
+    path "*_fastqc.{html,zip}"
+
+    script:
+    """
+    fastqc -t 4 ${reads}
+    """
+}
+
+process fastqc_trimmed {
+
+    module 'fastqc/0.12.1'
+    stageInMode 'copy'
+    publishDir 'params.outdir/qc_trimmed', mode: 'copy'
+
+    input:
+    path reads
+
+    output:
+    path "*_fastqc.{html,zip}"
+
+    script:
+    """
+    fastqc -t 4 ${reads}
+    """
+}
+
+process trim {
+
+    module 'trimmomatic/0.40'
+    stageInMode 'copy'
+    publishDir 'params.outdir/trimmed', mode: 'copy'
+
+    input:
+    path reads
+
+    output:
+    path "trimmed_${reads}"
+
+    script:
+    """
+    trimmomatic SE -threads 4 ${reads} trimmed_${reads} \\
+        SLIDINGWINDOW:4:20 MINLEN:36
+    """
+}
+
 workflow {
+
     main:
     reads_ch = Channel.fromPath(params.input)
-    ...
+
+    fastqc_raw(reads_ch)
+    trim(reads_ch)
+    fastqc_trimmed(trim.out)
 }
 ```
+
+:::
+
+
 Nothing about the pipeline's logic changed — you're just naming the thing that used to be hardcoded, so it can be set from outside the script.
 
 ::: {.callout-note}
@@ -66,17 +141,21 @@ Defaults still matter. Declaring params.input = '...' gives it a default value. 
 
 Right now those `params.*` lines live at the top of your `.nf` file. Nextflow also recognizes a special file, `nextflow.config`, **sitting next to your script**, and automatically loads it every time you run nextflow run. Anything declared there is available as `params.*` without you writing a single line in the workflow script itself:
 
+See `scripts/fastqc_trimmomatic_params/main.nf` and `scripts/fastqc_trimmomatic_params/nextflow.config`. 
+
 ```groovy
 // nextflow.config
 params {
     input  = 'data/sample_*_*.fastq'
     outdir = 'results'
-    genome = 'ref/genome.fa'
 }
 ```
 
-This matters for a simple reason: your **pipeline logic** (the `.nf` file) and **your pipeline's settings** (the `.config` file) are now **separate**. You can hand someone the .nf script and let them bring their own nextflow.config — or none at all, and get your defaults.
+This matters for a simple reason: your **pipeline logic** (the `.nf` file) and **your pipeline's settings** (the `.config` file) are now **separate**. You can hand someone the .nf script and let them bring their own nextflow.config — or none at all, and get your defaults. 
 
+::: {.callout-important}
+ In fact, the consensus is that pipelines should be built so that any **user only has to modify the settings in the `nextflow.config`** or config files, and no modifications of the processes or workflows are necessary. 
+:::
 
 ::: {.callout-tip}
 This is also where later today's container and SLURM settings will live — `nextflow.config` is going to grow into the single place that controls how and where a pipeline runs, while the `.nf` file stays focused on what it does.
@@ -107,7 +186,7 @@ nextflow run pipeline.nf -resume
 
 Nextflow checks each task against its cached record. If a task's inputs and command are byte-for-byte identical to a previous successful run, it skips re-executing it and reuses the cached output straight from `work/`. Only tasks that are new, changed, or previously failed actually run.
 
-Command output:
+Example of command output:
 ```
 executor >  local (2)
 [a1/2b3c4d] fastqc_raw (1)   | 3 of 3, cached: 3 ✔
@@ -346,10 +425,10 @@ process fastqc {
 
     module 'fastqc/0.12.1'
     stageInMode 'copy'
-    publishDir "${params.outdir}/${label}", mode: 'copy'
+    publishDir "${params.outdir}/${qc_stage}", mode: 'copy'
 
     input:
-    val label
+    val qc_stage
     path reads
 
     output:
@@ -377,7 +456,7 @@ workflow {
 }
 ```
 
-Notice that `label` is declared with the val qualifier (`val label`) rather than path — this tells Nextflow it's a plain value (a string), not a file to be staged into the task's working directory. Since fastqc now expects two inputs positionally (label, then reads), each call supplies both: `Channel.value('qc_raw')` wraps a single string so it lines up as a channel item, just like reads_ch does for the file input.
+Notice that `qc_stage` is declared with the val qualifier (`val qc_stage`) rather than path — this tells Nextflow it's a plain value (a string), not a file to be staged into the task's working directory. Since fastqc now expects two inputs positionally (label, then reads), each call supplies both: `Channel.value('qc_raw')` wraps a single string so it lines up as a channel item, just like reads_ch does for the file input.
 
 > Note. This is genuinely one module now doing the job that took two separate process definitions on Day 1 — no duplicated process body, and each call still gets its own labeled output folder. The trade-off: the process signature is slightly less obvious at a glance (two positional inputs instead of one), which is exactly why this was left as a stretch task rather than the default path through this section.
 :::
