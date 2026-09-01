@@ -38,6 +38,8 @@ resume/caching) that make Nextflow pleasant to use day-to-day. Those come
 tomorrow; today is about the core mental model everything else sits on top
 of.
 
+> Note: if you would like to learn more about the benefit of pipeline managers you can [read this](https://www.nature.com/articles/s41592-021-01254-9)
+
 By the end of this session, you will have:
 
 - run your **first Nextflow process** (a single `fastqc` call on one file)

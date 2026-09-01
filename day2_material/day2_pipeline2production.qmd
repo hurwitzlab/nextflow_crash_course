@@ -162,7 +162,75 @@ This is also where later today's container and SLURM settings will live — `nex
 :::
 
 
-## 3. Overriding from the command line
+## 3.`getManifest()`: naming every output once
+
+Right now, every `publishDir` you write picks its own path — `results/fastqc`,
+`results/trimmed`, whatever seemed reasonable at the time. That's fine for
+one pipeline run by one person. It breaks down the moment you have several
+pipelines, run by several people, whose outputs need to sit next to each
+other in a shared location — say, on `/rs1`, where everyone's assemblies,
+QC reports, and annotations are meant to accumulate into one browsable,
+queryable collection instead of a pile of one-off folder names.
+
+The fix is to stop deciding paths process-by-process and declare them all
+once, in a single Groovy map:
+
+```groovy
+def getManifest() {
+    [
+        trimmed_r1  : "fastq/trimmed_r1.fq.gz",
+        trimmed_r2  : "fastq/trimmed_r2.fq.gz",
+        contigs     : "assembly/contigs.fa",
+        qc_html     : "log/fastp_log.html",
+        qc_json     : "log/fastp_log.json",
+    ]
+}
+```
+
+> You can see more examples of `getManifest()` in the `manifests/` folder under day2_material
+
+Every process's `publishDir` then references a key from this map instead of
+a hand-typed string. Nothing here is special Nextflow syntax — `getManifest()`
+is a plain Groovy function you write, returning a plain map. The value is
+entirely in the convention: **one place decides where every output goes, for
+every pipeline that adopts it.**
+
+::: {.callout-important}
+This is *not* Nextflow's built-in `manifest {}` block in `nextflow.config`
+(that one holds pipeline metadata — name, author, version — read by
+`nextflow pull`/`nextflow run <repo>`). This is a project convention that
+happens to reuse the word "manifest." Different mechanism, different
+purpose — don't confuse the two if you go looking at Nextflow's docs.
+:::
+
+**Why bother?** Two payoffs, both downstream of the same fact — the path for
+any given output is now *known in advance*, not something you have to run
+the pipeline and go look for:
+
+- **A shared data lake.** If every pipeline that touches `/rs1` writes
+  `contigs.fa` to the same relative spot, outputs from different projects,
+  different people, and different runs land in a predictable structure —
+  the collection becomes something you can query across, instead of
+  something you have to relearn per project.
+- **Machine-readable by default.** A script — or an AI agent — that needs
+  to find "the assembly output" doesn't have to parse your Groovy code to
+  figure out where it went. It reads the manifest. This is also the
+  foundation for emitting a `manifest.json` alongside your results at the
+  end of a run: a small file that says exactly what was produced and where,
+  so any downstream tool can consume your pipeline's outputs without
+  knowing anything about how the pipeline itself works.
+
+::: {.callout-tip}
+We won't wire `getManifest()` into `publishDir` directives in this workshop
+— that's a natural next step once you're writing pipelines of your own, past
+the point where 5–6 processes fit comfortably in your head. The pattern is
+worth knowing now so you recognize it when your outputs start needing to
+live somewhere other than your own laptop.
+:::
+
+
+
+## 4. Overriding from the command line
 
 Any `params.x` — whether it's default-set in the script or in nextflow.config — can be overridden at runtime with a double-dash flag of the same name:
 
@@ -174,7 +242,7 @@ nextflow run pipeline.nf --input 'data/sample_002_*.fastq' --outdir results_samp
 **One dash vs. two**. This trips almost everyone up at least once: your parameters use two dashes (--input), because they're user-defined. Nextflow's own built-in options use a single dash (-resume, -profile, -work-dir). If a run mysteriously ignores a flag you passed, check dash count first.
 :::
 
-## 4. `-resume`: don't redo finished work
+## 5. `-resume`: don't redo finished work
 
 Remember from yesterday: every nextflow run creates a fresh, hash-named subdirectory in `work/` for each task, and old ones are never overwritten. That record of "what already ran, with what inputs" is exactly what makes the next feature possible.
 
@@ -201,7 +269,7 @@ That cached: 3 is the payoff — three tasks didn't run at all, they were served
 **What actually triggers a re-run**. Caching is based on a hash of the task's inputs and its exact command (including interpolated variables). Change the input file, change a parameter that feeds into the script block, or edit the process itself, and that task's hash changes — Nextflow correctly reruns it instead of quietly serving stale output.
 :::
 
-## 5. Profiles: one pipeline, swappable environments
+## 6. Profiles: one pipeline, swappable environments
 
 So far, everything you've configured is a value (a path, a filename). **Profiles let you configure behavior** — bundling up a set of config settings under a name, so you can flip between entire configurations with one flag.
 
@@ -228,7 +296,7 @@ Nothing about `docker` actually does anything yet — that's intentional. Right 
 :::
 
 
-## 6. Exercise: parameterize the pipeline
+## 7. Exercise: parameterize the pipeline
 
 Using your Day 1 3-step pipeline (fastqc_raw → trim → fastqc_trimmed) as a starting point:
 
@@ -375,7 +443,111 @@ This solves code duplication, not configuration duplication — both aliases sti
 ### Why this matters as a pipeline grows
 Three processes in one file is a style choice. Fifteen processes in one file is a **maintenance** problem — nobody wants to Ctrl-F through five hundred lines to find one process, and code review on a single massive file is painful compared to reviewing a focused, one-process diff. Modules are how real, production Nextflow pipelines (including everything under nf-core) stay navigable as they grow. Additionally, separating your processes into modules allows you to **reuse** them in different workflows or pipelines without having to replicate them constantly. 
 
-## 4. Exercise: refactor into modules
+## 4. `utils/` and `bin/`: helpers that aren't processes
+
+Everything in `modules/` so far has been a **process** — a unit of work with
+its own `input:`, `output:`, and `script:` block. Not everything you want to
+reuse fits that shape. Two common cases, two different homes:
+
+**`utils/` — Groovy helper functions.** Plain logic, `include`d the same way
+as a process:
+
+```groovy
+// utils/archive.nf
+def untarCmd(String archivePath) {
+    "tar -xzf ${archivePath}"
+}
+```
+
+```groovy
+// main.nf
+include { untarCmd } from './utils/archive.nf'
+
+process extract {
+    input:
+    path archive
+
+    script:
+    "${untarCmd(archive.name)}"
+}
+```
+
+**`bin/` — standalone scripts, any language.** If a pipeline author has
+written a Python script — say, `retrieve_fasta.py`, for pulling a reference
+sequence from a database — it doesn't go in `utils/`. It goes in a `bin/`
+directory at the pipeline root. Nextflow automatically adds `bin/` to every
+process's `PATH`, so the script is callable **by name**, with no `include`
+and no full path:
+
+```
+my_pipeline/
+├── main.nf
+├── nextflow.config
+├── modules/
+├── utils/
+└── bin/
+    └── retrieve_fasta.py
+```
+
+```groovy
+process fetch_reference {
+    output:
+    path "reference.fa"
+
+    script:
+    """
+    retrieve_fasta.py --accession GCF_000001405.40 -o reference.fa
+    """
+}
+```
+
+(The script needs its executable bit set — `chmod +x bin/retrieve_fasta.py`
+— and a shebang line, same as running it standalone.)
+
+::: {.callout-tip}
+Same scoping rule as `modules/`: helpers used by one pipeline stay nested
+inside it (`utils/`, `bin/`); helpers useful across several pipelines move
+up into a shared location each pipeline's `include` or `PATH` can reach.
+:::
+
+::: {.callout-tip}
+## A note on pipeline layout
+
+As your pipeline grows past one `.nf` file, where things live starts to
+matter. A common convention:
+```
+my_pipeline/
+├── main.nf
+├── nextflow.config
+├── modules/
+│ └── fastqc.nf
+└── utils/
+└── helpers.nf
+```
+
+Everything belonging to *this* pipeline — its entry point, its config, and
+any process or helper only *this* pipeline uses — lives under one named
+directory. That's the unit you'd hand to a collaborator, or point `nextflow
+run` at.
+
+If a module or helper function is useful across *several* pipelines —
+say, a `fastqc.nf` module every pipeline in your group reuses — it moves up
+a level, out of any one pipeline's directory, into a shared location that
+each pipeline's `include` statement points to:
+
+```groovy
+// inside my_pipeline/main.nf
+include { fastqc } from '../shared_modules/fastqc.nf'
+```
+
+The rule of thumb: **scope decides location.** Pipeline-specific stays
+nested inside the pipeline; anything meant to be reused moves up and out.
+This is the same instinct behind the manifest convention from earlier —
+predictable structure is what makes a pipeline (and its outputs) something
+other people, or other pipelines, can actually build on.
+:::
+
+## 5. Exercise: refactor into modules
 
 Using your parameterized 3-step pipeline from this morning:
 
@@ -462,11 +634,11 @@ Notice that `qc_stage` is declared with the val qualifier (`val qc_stage`) rathe
 :::
 
 
-## 4. Hello Containers: Portability
+# 4. Hello Containers: Portability
 
 Every process you've written so far has assumed the tool it needs (`fastqc`, `trimmomatic`, ...) is already installed and on the `PATH` (in our case because we were using HPC modules). That works fine as long as everyone runs this on our cluster with our exact module set — but the moment someone runs it on a different HPC, their own laptop, or even just a different module version six months from now, that assumption is gone. In that case, the pipeline either fails outright or worse, runs quietly with the wrong tool version and gives them different results than yours. **Containers** fix this by packaging the tool and everything it depends on into one portable unit, so "works on our cluster" becomes "works anywhere."
 
-### 4.1 Why containers
+## 4.1 Why containers
 
 Two tools rarely agree on which version of a third tool they need. `salmon 1.4` and `salmon 1.10` can give you meaningfully different quantifications — and "works on my machine" isn't a reproducible method. This is dependency hell: manageable for one tool on one machine, unmanageable for a pipeline with a dozen tools running on a cluster, a laptop, and a collaborator's machine six months from now.
 
@@ -476,7 +648,7 @@ A container packages a tool *and* its exact runtime environment — OS libraries
 This is also why `publishDir`'s brittleness (Day 1, §2.1.1) matters more once you're using containers — the container guarantees the *tool* is reproducible, but you still own getting the *outputs* somewhere sane. Keep that in mind for the stretch task later today.
 :::
 
-### 4.2 Docker vs. Singularity/Apptainer
+## 4.2 Docker vs. Singularity/Apptainer
 
 Docker is the tool most people mean when they say "containers" — and it's what you'll see in almost every published pipeline's documentation. But Docker requires a root-level daemon running on the host, which HPC administrators will not grant you on a shared, multi-tenant cluster. That's not a policy quirk — it's a real privilege-escalation risk when hundreds of users share a machine.
 
@@ -596,11 +768,11 @@ Requirements for this to work:
 - Input file "not found" even though it's sitting right there in the process's own input directory → symlink staging issue, add `stageInMode 'copy'` (point 4).
 
 
-## 5. Running on SLURM
+# 5. Running on SLURM
 
 Everything so far has run one task at a time on whatever node you happened to be on. That's fine for FastQC on one sample — not fine for a more demanding task, such as an assembly step across 40 samples. This section connects your pipeline to the actual scheduler the cluster runs on.
 
-### 5.1 The `executor` directive
+## 5.1 The `executor` directive
 
 Nextflow doesn't submit jobs to SLURM by default — it runs tasks locally, one process execution at a time, same as everything you've done today. The `executor` setting tells Nextflow to hand each task off to SLURM instead:
 
@@ -610,7 +782,7 @@ process.executor = 'slurm'
 
 Once this is set, every task Nextflow runs — every sample through every process — becomes its own `sbatch` submission behind the scenes. You don't write `sbatch` scripts by hand for each task; Nextflow generates and submits them for you, one per process execution, using the resource directives you give it.
 
-### 5.2 Writing a SLURM profile
+## 5.2 Writing a SLURM profile
 
 You already used `profiles {}` in §4.3 to turn a container engine on without touching pipeline code. Same mechanism, different job: a SLURM profile bundles executor + resource defaults so you can switch between "run locally" and "run on the cluster" with one flag.
 
@@ -629,7 +801,7 @@ profiles {
 Run with `-profile slurm,apptainer` to combine both — profiles stack, so your container settings from §4 and your scheduler settings here apply together without redefining anything.
 
 
-### 5.3 Submitting: interactive session vs. `sbatch`-wrapped
+## 5.3 Submitting: interactive session vs. `sbatch`-wrapped
 
 There are two ways to launch `nextflow run` itself, and they're not the same thing as the SLURM jobs Nextflow submits *for* your tasks (§5.1) — this trips people up, so it's worth being explicit:
 
@@ -652,7 +824,7 @@ The head process itself only needs to stay alive and track state — it's not do
 :::
 
 
-### 5.5 Exercise: give assembly more resources than FastQC
+## 5.5 Exercise: give assembly more resources than FastQC
 
 FastQC is light. Assembly is not. Requesting the same CPUs/memory for both wastes allocation on the light step and starves the heavy one. `withName` (or `withLabel`, if you've tagged processes with labels) lets you set resources per process instead of one blanket default.
 
@@ -722,12 +894,12 @@ Nesting `withName` inside `profiles { slurm { ... } }` scopes it correctly: thes
 :::
 :::
 
-## 6. Capstone: Assemble Your Reads
+# 6. Capstone: Assemble Your Reads
 
 This is where everything today comes together. You're extending the pipeline you already have — `fastqc → trim → fastqc(trimmed)` — with a 4th step: de novo assembly with MEGAHIT. When you're done, you'll have a real, if small, pipeline: FASTQC → trim → FASTQC → assemble, containerized, running on SLURM.
 
 
-### 6.1 Guided steps
+## 6.1 Guided steps
 
 1. **Write the `megahit` process**, taking `trim.out` as input:
 ```groovy
@@ -781,7 +953,7 @@ This is where everything today comes together. You're extending the pipeline you
 Work at your own pace from here. If you get a container or staging error, check §4.4's diagnostic table before asking — most issues at this stage are a missing bind path or a missing `stageInMode 'copy'`, not a new problem.
 :::
 
-### 6.2 Stretch task: aggregate QC with MultiQC
+## 6.2 Stretch task: aggregate QC with MultiQC
 
 If you finish early: add a process, `multiqc`, that gathers every FastQC and Trimmomatic report into one summary — the same `.collect()` pattern from Day 1 §3.3 (wait for every upstream item, then emit one combined item).
 
@@ -806,7 +978,7 @@ process multiqc {
 **Your task:** figure out how to combine the outputs of both `fastqc` calls and `trim` into a single channel `multiqc` can consume — you'll need `.collect()` and possibly `.mix()` (Day 1, §2's branching-vs-chaining callout mentions `.mix()` in passing; this is where you actually need it).
 
 
-### 6.3 Another (ADVANCED) stretch task: align reads with BWA to host genome and extract unaligned reads with SAMtools
+## 6.3 Another (ADVANCED) stretch task: align reads with BWA to host genome and extract unaligned reads with SAMtools
 
 This task introduces a few things we haven't used yet today: a **process with more than one input** (reads *and* a reference genome), a **channel for a reference file** rather than sample data, and a cluster-specific constraint around **downloading things ahead of time** since compute nodes have no internet access. Each is explained inline as it comes up.
 
@@ -897,3 +1069,6 @@ Since this channel only ever emits one item (the reference genome doesn't change
 ::: {.callout-warning}
 `-f 4` is a SAM flag filter, not something Nextflow-specific — worth a quick `samtools flags` or a peek at the [SAM spec](https://samtools.github.io/hts-specs/SAMv1.pdf) if flag values are new to you. Flag `4` means "segment unmapped"; combining flags (e.g. filtering out both unmapped reads and their mapped mates) uses different flag arithmetic, out of scope for today but worth knowing exists.
 :::
+
+
+> Note: Think about if BWA + SAMtools should be a subworkflow since you will probably use them together a lot 
