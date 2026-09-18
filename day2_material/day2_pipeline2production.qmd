@@ -45,11 +45,15 @@ Yesterday you built a working 3-step pipeline — but every path is hardcoded: `
 
 Nextflow lets you declare parameters — named variables the workflow reads from, instead of literal values baked into the code. Any variable prefixed with `params.` is a pipeline parameter:
 
-At the top of your final script from yesterday (`fastqc_example_3.nf`) you can add the following: 
+At the top of your final script from yesterday (`fastqc_example_3.nf`) you can add the following:
 ```groovy
-params.input      = 'data/sample_*_*.fastq'
+params.input      = '/gpfs_backup/bioinfo_data/training_data/nextflow_crash_course/sample_*_*.fastq.gz'
 params.outdir     = 'results'
 ```
+
+::: {.callout-note}
+Notice the default value itself also changes here, from yesterday's local toy files to the shared training dataset on the cluster (`/gpfs_backup/bioinfo_data/training_data/nextflow_crash_course`) — this is the real dataset you'll run the rest of today's pipeline against, now that it's becoming something you'd actually reuse rather than a one-off script.
+:::
 
 Inside the workflow block, you swap the hardcoded string for the parameter (see `scripts/fastc_trimmomatic_params.nf`) .
 
@@ -59,7 +63,7 @@ Inside the workflow block, you swap the hardcoded string for the parameter (see 
 ```groovy
 #!/usr/bin/env nextflow
 
-params.input      = 'data/sample_*_*.fastq'
+params.input      = '/gpfs_backup/bioinfo_data/training_data/nextflow_crash_course/sample_*_*.fastq.gz'
 params.outdir     = 'results'
 
 process fastqc_raw {
@@ -146,7 +150,7 @@ See `scripts/fastqc_trimmomatic_params/main.nf` and `scripts/fastqc_trimmomatic_
 ```groovy
 // nextflow.config
 params {
-    input  = 'data/sample_*_*.fastq'
+    input  = '/gpfs_backup/bioinfo_data/training_data/nextflow_crash_course/sample_*_*.fastq.gz'
     outdir = 'results'
 }
 ```
@@ -235,7 +239,7 @@ live somewhere other than your own laptop.
 Any `params.x` — whether it's default-set in the script or in nextflow.config — can be overridden at runtime with a double-dash flag of the same name:
 
 ```bash
-nextflow run pipeline.nf --input 'data/sample_002_*.fastq' --outdir results_sample002
+nextflow run pipeline.nf --input '/gpfs_backup/bioinfo_data/training_data/nextflow_crash_course/sample_2_*.fastq.gz' --outdir results_sample2
 ```
 
 ::: {.callout-warning}
@@ -257,8 +261,8 @@ Nextflow checks each task against its cached record. If a task's inputs and comm
 Example of command output:
 ```
 executor >  local (2)
-[a1/2b3c4d] fastqc_raw (1)   | 3 of 3, cached: 3 ✔
-[e5/6f7a8b] trim (1)         | 3 of 3, cached: 1 ✔
+[a1/2b3c4d] fastqc_raw (1)   | 5 of 5, cached: 5 ✔
+[e5/6f7a8b] trim (1)         | 5 of 5, cached: 1 ✔
 ```
 
 That cached: 3 is the payoff — three tasks didn't run at all, they were served from work/ because nothing about them changed.
@@ -312,7 +316,7 @@ nextflow run pipeline.nf -profile hazel
 
 Using your Day 1 3-step pipeline (fastqc_raw → trim → fastqc_trimmed) as a starting point:
 
-1. Replace the hardcoded `Channel.fromPath('data/sample_*_*.fastq')` with `Channel.fromPath(params.input)`.
+1. Replace the hardcoded `Channel.fromPath('data/sample_*_*.fastq')` with `Channel.fromPath(params.input)`, and point its default at the shared training dataset (`/gpfs_backup/bioinfo_data/training_data/nextflow_crash_course/sample_*_*.fastq.gz`) instead of yesterday's local toy files.
 2. Add `params.input` and `params.outdir` to a `nextflow.config` file (you won't use genome yet today — it's there because you'll need it for the capstone assembly step this afternoon).
 3. Update each process's `publishDir` to build off `params.outdir` instead of a hardcoded folder name (e.g. `publishDir "${params.outdir}/trimmed", mode: 'copy'`).
 4. Run the pipeline once normally, then run it again with `-resume` and confirm you see cached: in the output.
@@ -325,7 +329,7 @@ Take a few minutes before checking the solution.
 ```groovy
 // nextflow.config
 params {
-    input  = 'data/sample_*_*.fastq'
+    input  = '/gpfs_backup/bioinfo_data/training_data/nextflow_crash_course/sample_*_*.fastq.gz'
     outdir = 'results'
 }
 
@@ -956,7 +960,7 @@ This is where everything today comes together. You're extending the pipeline you
 ```groovy
    workflow {
        main:
-       reads_ch = Channel.fromPath('data/sample_*_*.fastq')
+       reads_ch = Channel.fromPath('/gpfs_backup/bioinfo_data/training_data/nextflow_crash_course/sample_*_*.fastq.gz')
 
        fastqc(reads_ch)
        trim(reads_ch)
@@ -1021,7 +1025,7 @@ A common real-world step before assembly: align your trimmed reads against a hos
 ::: {.callout-important}
 ### When compute nodes have no internet access (NCSU HPC)
 
-Every reference we've used so far has already been on disk in `data/` — but a host genome isn't something we've provided, and compute nodes on our cluster **can't reach the internet** to download one mid-job. If a task tries to fetch a reference from NCBI/Ensembl/etc. while running on a compute node, it will just hang or fail with a connection error that has nothing to do with your Nextflow code.
+Every reference we've used so far has already been on disk at a known shared path (`/gpfs_backup/bioinfo_data/training_data/nextflow_crash_course`) — but a host genome isn't something we've provided, and compute nodes on our cluster **can't reach the internet** to download one mid-job. If a task tries to fetch a reference from NCBI/Ensembl/etc. while running on a compute node, it will just hang or fail with a connection error that has nothing to do with your Nextflow code.
 
 Anything your pipeline needs from outside the cluster — reference genomes, databases, container images not already in our shared library — has to be downloaded **ahead of time**, from the login node (which does have internet access), and referenced by its path on disk. This is why our FastQC/Trimmomatic/MEGAHIT containers all point at pre-pulled `.sif` files in `/usr/local/usrapps/brc/brc_modules/images/` rather than pulling `docker://...` live (§4.2.1) — same reasoning applies to reference genomes.
 

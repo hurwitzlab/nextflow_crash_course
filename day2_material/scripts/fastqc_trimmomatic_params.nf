@@ -1,6 +1,6 @@
 #!/usr/bin/env nextflow
 
-params.input      = 'data/sample_*_*.fastq'
+params.input      = '/gpfs_backup/bioinfo_data/training_data/nextflow_crash_course/sample_*_*.fastq.gz'
 params.outdir     = 'results'
 
 process fastqc_raw {
