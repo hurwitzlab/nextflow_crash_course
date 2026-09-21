@@ -1,0 +1,127 @@
+---
+title: "Prerequisites (Non-NCSU Attendees)"
+author:
+  - name: "María (Mery) Touceda-Suárez"
+    affiliations:
+      - name: "Bioinformatics Research Center"
+        url: "https://brc.ncsu.edu/"
+date: today
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    code-copy: true
+    code-overflow: wrap
+    include-in-header:
+      text: |
+        <style>
+        @media print {
+          pre, code, .callout {
+            break-inside: avoid;
+          }
+        }
+        </style>
+---
+
+This page outlines what you should set up and review before the Nextflow workshop begins if you **do not** have an NCSU Hazel HPC account. You'll need access to **your own HPC or compute environment** with Nextflow installed and the workshop's tools available, either as pre-installed software/modules or as containers.
+
+## Install Nextflow on Your HPC
+
+- [ ] Nextflow requires Java 17–21. Check whether Java is already available:
+
+```bash
+$ java -version
+```
+
+If it isn't, load or install it (e.g. `module avail java` on many HPC systems) before installing Nextflow.
+
+- [ ] Check whether Nextflow is already available as an environment module on your HPC:
+
+```bash
+$ module avail nextflow
+```
+
+If it is, you can simply `module load nextflow` and skip the manual install below.
+
+- [ ] Install Nextflow by following the [official installation instructions](https://www.nextflow.io/docs/latest/install.html). The simplest approach is:
+
+```bash
+$ curl -s https://get.nextflow.io | bash
+```
+
+This creates a `nextflow` executable in your current directory. Move it into a directory on your `$PATH` (e.g. `~/bin`) so it can be run from anywhere:
+
+```bash
+$ mkdir -p ~/bin
+$ mv nextflow ~/bin/
+$ export PATH="$PATH:$HOME/bin"
+```
+
+Add the `export PATH` line to your `~/.bashrc` (or equivalent) so it persists across logins.
+
+- [ ] Confirm Nextflow runs:
+
+```bash
+$ nextflow -version
+```
+
+## Access to the Workshop's Tools
+
+The workshop's exercises run a small number of common bioinformatics tools (e.g. **FastQC** and **Trimmomatic**) inside Nextflow processes. On Hazel, these are provided by the BRC as pre-built modules/containers (see [Loading BRC Modules](loading_brc_modules.qmd)) — outside NCSU, you'll need to provide equivalent access on your own system, using **one** of the following options.
+
+### Option A: Pre-installed software or environment modules
+
+- [ ] Check whether your HPC already provides these tools as environment modules or pre-installed software:
+
+```bash
+$ module avail fastqc
+$ module avail trimmomatic
+```
+
+If they're available, note the `module load` command (or install path) for each — you'll substitute it for the BRC `module` directives used in the workshop's example pipelines.
+
+### Option B: Containers via Singularity/Apptainer and BioContainers
+
+If the tools aren't available as modules, you can run them from containers instead. [BioContainers](https://biocontainers.pro/) publishes ready-made container images for most common bioinformatics tools, built directly from their [Bioconda](https://bioconda.github.io/) packages.
+
+- [ ] Check that a container engine is available on your HPC:
+
+```bash
+$ singularity --version
+# or
+$ apptainer --version
+```
+
+(Apptainer is the actively maintained successor to Singularity; the commands are interchangeable for our purposes.) If neither is installed, ask your HPC administrators — most institutional HPC systems provide one or the other as a module.
+
+- [ ] Find the tool you need on BioContainers. Search for it at [biocontainers.pro](https://biocontainers.pro/) or browse its images directly on [quay.io/organization/biocontainers](https://quay.io/organization/biocontainers), and note the exact image tag (tool version + build hash), e.g. `fastqc:0.12.1--hdfd78af_0`.
+
+- [ ] Pull the container image with `singularity pull` (or `apptainer pull`):
+
+```bash
+$ singularity pull fastqc.sif docker://quay.io/biocontainers/fastqc:0.12.1--hdfd78af_0
+$ singularity pull trimmomatic.sif docker://quay.io/biocontainers/trimmomatic:0.39--hdfd78af_1
+```
+
+::: {.callout-note}
+The workshop's example pipeline scripts request tools with a `module` directive, e.g. `module 'fastqc/0.12.1'`, which points Nextflow at a Hazel/BRC module. Outside Hazel, replace this with a `container` directive pointing at your `.sif` file (or the `docker://` image URI directly), and enable Singularity in your `nextflow.config`:
+
+```groovy
+singularity.enabled = true
+
+process {
+    withName: fastqc {
+        container = '/path/to/fastqc.sif'
+    }
+    withName: trim {
+        container = '/path/to/trimmomatic.sif'
+    }
+}
+```
+:::
+
+::: {.callout-tip}
+You don't have to pre-pull images by hand — if `singularity.enabled = true` and a process's `container` directive points at a `docker://` URI, Nextflow will pull and cache the image automatically the first time that process runs.
+:::

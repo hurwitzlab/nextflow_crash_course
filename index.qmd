@@ -22,7 +22,9 @@ Welcome to the Nextflow Crash Course — a series of hands-on workshops introduc
 
 To get the most out of this Nextflow workshop, please familiarize yourself with the following topics and complete the associated material if necessary:
 
-### [Nextflow workshop prerequisites](day0_material/00_prerequisites.qmd)
+### [Nextflow workshop prerequisites (NCSU / Hazel HPC)](day0_material/00_prerequisites.qmd)
+
+### [Nextflow workshop prerequisites (Non-NCSU attendees)](day0_material/00b_prerequisites_non_ncsu.qmd)
 
 
 ## Day 1 and 2: Workshop
