@@ -14,7 +14,7 @@ process fastqc_raw {
 
     script:
     """
-    fastqc -t 4 ${reads}
+    fastqc -t ${task.cpus} ${reads}
     """
 }
 
@@ -32,7 +32,7 @@ process fastqc_trimmed {
 
     script:
     """
-    fastqc -t 4 ${reads}
+    fastqc -t ${task.cpus} ${reads}
     """
 }
 
@@ -50,7 +50,7 @@ process trim {
 
     script:
     """
-    trimmomatic SE -threads 4 ${reads} trimmed_${reads} \\
+    trimmomatic SE -threads ${task.cpus} ${reads} trimmed_${reads} \\
         SLIDINGWINDOW:4:20 MINLEN:36
     """
 }

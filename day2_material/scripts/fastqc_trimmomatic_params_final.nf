@@ -7,7 +7,7 @@ process fastqc_raw {
 
     module 'fastqc/0.12.1'
     stageInMode 'copy'
-    publishDir 'params.outdir/qc_raw', mode: 'copy'
+    publishDir "${params.outdir}/qc_raw", mode: 'copy'
 
     input:
     path reads
@@ -25,7 +25,7 @@ process fastqc_trimmed {
 
     module 'fastqc/0.12.1'
     stageInMode 'copy'
-    publishDir 'params.outdir/qc_trimmed', mode: 'copy'
+    publishDir "${params.outdir}/qc_raw", mode: 'copy'
 
     input:
     path reads
@@ -43,7 +43,7 @@ process trim {
 
     module 'trimmomatic/0.40'
     stageInMode 'copy'
-    publishDir 'params.outdir/trimmed', mode: 'copy'
+    publishDir "${params.outdir}/qc_raw", mode: 'copy'
 
     input:
     path reads

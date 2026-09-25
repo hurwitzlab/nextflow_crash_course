@@ -14,7 +14,7 @@ process trim {
 
     script:
     """
-    trimmomatic SE -threads 4 ${reads} trimmed_${reads} \\
+    trimmomatic SE -threads ${task.cpus} ${reads} trimmed_${reads} \\
         SLIDINGWINDOW:4:20 MINLEN:36
     """
 }

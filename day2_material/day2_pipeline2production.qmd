@@ -132,18 +132,14 @@ workflow {
 }
 ```
 
-::: {.callout-tip collapse="true"}
+::: {.callout-important collapse="true"}
 # Why isn't this working the way I expected? 
-If you try running `fastqc_trimmomatic_params.nf` you will observe **that the output directory is not called `results/`, but rather it is called `params.outdir/`**. Why is that? 
-
-Here `publishDir 'params.outdir/qc_raw'` created a folder with that literal name. In Groovy (the language underlying Nextflow's grammar), single-quoted strings are never interpolated. 
-
-**The fix** is a double-quoted string: `publishDir "${params.outdir}/qc_raw"`.
+If you try running `fastqc_trimmomatic_params.nf` you will observe **that the output directory is not called `results/`, but rather it is called `params.outdir/`**. But we created the parameter and we gave it the value results, so why is that? 
+> Here `publishDir 'params.outdir/qc_raw'` created a folder with that literal name. In Groovy (the language underlying Nextflow's grammar), **single-quoted strings are never interpolated**. 
+> **The fix** is a double-quoted string: `publishDir "${params.outdir}/qc_raw"`.
 :::
 
-
 :::
-
 
 Nothing about the pipeline's logic changed — you're just naming the thing that used to be hardcoded, so it can be set from outside the script.
 
@@ -290,30 +286,13 @@ So far, everything you've configured is a value (a path, a filename). **Profiles
 ```groovy
 // nextflow.config
 profiles {
-    hazel {
-
-        // Processing configuration
-        process.executor = 'slurm'
-        process.cpus      = 2
-        process.memory    = 4.GB
-        process.time      = 1.h
-        process.beforeScript = 'module load singularity'
-
-        process.resourceLimits = [
-            memory: 128.GB,
-            cpus:   24,
-            time:   120.h
-        ]
-       
-        
-        singularity {
-            enabled    = true
-            autoMounts = true
-            cacheDir   = System.getenv('APPTAINER_CACHEDIR') ?: "/share/${System.getenv('GROUP')}/${System.getenv('USER')}/tmp"
-
-            // autoMounts doesn't bind Hazel's system $TMPDIR, breaking tools that use it
-            runOptions = '-B ${TMPDIR:-/tmp}'
-        }
+      hazel {
+           process.executor = 'slurm'
+           process.cpus     = 2
+       }
+       test {
+           // placeholder
+       }
 }
 ```
 Select one at runtime with `-profile`:
@@ -327,7 +306,7 @@ nextflow run pipeline.nf -profile hazel
 Using your Day 1 3-step pipeline (fastqc_raw → trim → fastqc_trimmed) as a starting point:
 
 1. Replace the hardcoded `Channel.fromPath('data/sample_*_*.fastq')` with `Channel.fromPath(params.input)`, and point its default at the shared training dataset (`/gpfs_backup/bioinfo_data/training_data/nextflow_crash_course/sample_*_*.fastq.gz`) instead of yesterday's local toy files.
-2. Add `params.input` and `params.outdir` to a `nextflow.config` file (you won't use genome yet today — it's there because you'll need it for the capstone assembly step this afternoon).
+2. Add `params.input` and `params.outdir` to a `nextflow.config` file.
 3. Update each process's `publishDir` to build off `params.outdir` instead of a hardcoded folder name (e.g. `publishDir "${params.outdir}/trimmed", mode: 'copy'`).
 4. Run the pipeline once normally, then run it again with `-resume` and confirm you see cached: in the output.
 5. Add a second, empty profile (`test {}` alongside `hazel {}`) to nextflow.config, and run once with `-profile test` just to confirm the flag is accepted — nothing will look different yet, and that's the point.
@@ -344,37 +323,74 @@ params {
 }
 
 profiles {
-    hazel {
-
-        // Processing configuration
-        process.executor = 'slurm'
-        process.cpus      = 2
-        process.memory    = 4.GB
-        process.time      = 1.h
-        process.beforeScript = 'module load singularity'
-
-        process.resourceLimits = [
-            memory: 128.GB,
-            cpus:   24,
-            time:   120.h
-        ]
-       
-        
-        singularity {
-            enabled    = true
-            autoMounts = true
-            cacheDir   = System.getenv('APPTAINER_CACHEDIR') ?: "/share/${System.getenv('GROUP')}/${System.getenv('USER')}/tmp"
-
-            // autoMounts doesn't bind Hazel's system $TMPDIR, breaking tools that use it
-            runOptions = '-B ${TMPDIR:-/tmp}'
-        }
-
-    test {
-        // placeholder 
-    }
+      hazel {
+           process.executor = 'slurm'
+           process.cpus     = 2
+       }
+       test {
+           // placeholder
+       }
 }
+
 ```
 ```groovy
+// main.nf
+#!/usr/bin/env nextflow
+process fastqc_raw {
+
+    module 'fastqc/0.12.1'
+    stageInMode 'copy'
+    publishDir "${params.outdir}/qc_raw", mode: 'copy' //
+
+    input:
+    path reads
+
+    output:
+    path "*_fastqc.{html,zip}"
+
+    script:
+    """
+    fastqc -t ${task.cpus} ${reads}
+    """
+}
+
+process fastqc_trimmed {
+
+    module 'fastqc/0.12.1'
+    stageInMode 'copy'
+    publishDir "${params.outdir}/qc_raw", mode: 'copy'
+
+    input:
+    path reads
+
+    output:
+    path "*_fastqc.{html,zip}"
+
+    script:
+    """
+    fastqc -t ${task.cpus} ${reads}
+    """
+}
+
+process trim {
+
+    module 'trimmomatic/0.40'
+    stageInMode 'copy'
+    publishDir "${params.outdir}/qc_raw", mode: 'copy'
+
+    input:
+    path reads
+
+    output:
+    path "trimmed_${reads}"
+
+    script:
+    """
+    trimmomatic SE -threads ${task.cpus} ${reads} trimmed_${reads} \\
+        SLIDINGWINDOW:4:20 MINLEN:36
+    """
+}
+
 workflow {
     main:
     reads_ch = Channel.fromPath(params.input)
@@ -393,6 +409,26 @@ nextflow run main.nf -resume
 nextflow run main.nf -profile test
 ```
 The pipeline's logic hasn't changed at all — same three processes, same channel wiring. What changed is that paths, output locations, and (soon) execution environment are now things you set from outside the script, not things you edit inside it. That's the difference between a script you wrote for yourself and a pipeline someone else can pick up and run.
+
+
+::: {.callout-important}
+## Note on `${task.cpus}`
+We've gone a bit further in our parameterization: the scripts now use `${task.cpus}` instead of a hardcoded thread count. `task.cpus` is the value of the `cpus` directive for *that task*, so it comes from your config, not from the script.
+
+With `-profile hazel`, the single line `process.cpus = 2` does two jobs at once. It asks SLURM for 2 cores, and it passes `-t 2` to FastQC and `-threads 2` to Trimmomatic. What you request and what the tool uses can't drift apart.
+
+Without a profile that sets `cpus` (a plain `nextflow run main.nf`, or `-profile test`), `task.cpus` falls back to **1**, and the same script runs single-threaded. The code is the same and only the resources change.
+
+To give one process more cores, change the config, not the script:
+
+```groovy
+process {
+    withName: 'trim' { cpus = 4 }
+}
+```
+
+`withName` settings take priority over the generic `process.cpus`. `resourceLimits` caps whatever you request, so asking for more than 24 CPUs gets trimmed to 24 instead of leaving a job that never schedules.
+:::
 :::
 
 
