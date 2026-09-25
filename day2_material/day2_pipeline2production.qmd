@@ -132,6 +132,16 @@ workflow {
 }
 ```
 
+::: {.callout-tip collapse="true"}
+# Why isn't this working the way I expected? 
+If you try running `fastqc_trimmomatic_params.nf` you will observe **that the output directory is not called `results/`, but rather it is called `params.outdir/`**. Why is that? 
+
+Here `publishDir 'params.outdir/qc_raw'` created a folder with that literal name. In Groovy (the language underlying Nextflow's grammar), single-quoted strings are never interpolated. 
+
+**The fix** is a double-quoted string: `publishDir "${params.outdir}/qc_raw"`.
+:::
+
+
 :::
 
 
