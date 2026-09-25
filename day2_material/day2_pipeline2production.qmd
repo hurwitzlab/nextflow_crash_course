@@ -459,7 +459,7 @@ process trim {
 
     script:
     """
-    trimmomatic SE -threads 4 ${reads} trimmed_${reads} \\
+    trimmomatic SE -threads ${task.cpus} ${reads} trimmed_${reads} \\
         SLIDINGWINDOW:4:20 MINLEN:36
     """
 }
@@ -691,7 +691,7 @@ process fastqc {
 
     script:
     """
-    fastqc -t 4 ${reads}
+    fastqc -t ${task.cpus} ${reads}
     """
 }
 ```
@@ -758,7 +758,7 @@ This is the same idea as `module load fastqc` — get a tool onto your `PATH` �
 
 ### 4.3 Turning container use on: it's just another profile
 
-You already met `profiles` in §2 as a way to swap settings without touching your pipeline code — a `test` profile with small inputs, a `slurm` profile with executor settings. Container engines slot into the exact same mechanism. `docker` and `singularity` (or `apptainer`) are just profile names that flip a container engine on:
+You already met `profiles` in §2 as a way to swap settings without touching your pipeline code — a `test` profile with small inputs, a `hazel` profile with executor settings. Container engines slot into the exact same mechanism. `docker` and `singularity` (or `apptainer`) are just profile names that flip a container engine on:
 
 ```groovy
 // nextflow.config
@@ -784,7 +784,7 @@ process FASTQC {
 
     script:
     """
-    fastqc ${reads}
+    fastqc -t ${task.cpus} ${reads}
     """
 }
 ```
@@ -812,7 +812,7 @@ process fastqc {
 
     script:
     """
-    fastqc -t 4 ${reads}
+    fastqc -t ${task.cpus} ${reads}
     """
 }
 ```
@@ -825,14 +825,40 @@ Requirements for this to work:
    module load apptainer
    nextflow run main.nf -profile apptainer
 ```
-3. **Bind paths that aren't auto-mounted.** `autoMounts` covers your home directory and the current working directory, but not everything — e.g. `/rs1` (our shared storage). If a process reads or writes there and the file "isn't found" inside the container despite existing on disk, that's almost always a missing bind, not a real missing file. Add it per-process:
+3. **Bind paths that aren't auto-mounted.** With `autoMounts = true`, Nextflow binds the directories of each task's declared inputs, and Apptainer binds your home directory and the current directory by default. That's not everything. If a tool reaches `/rs1` (our shared storage) through a path Nextflow doesn't know about, like a database path passed as a string or a symlink pointing into `/rs1`, the container can't see it. If a file "isn't found" inside the container even though it exists on disk, that's almost always a missing bind, not a missing file.
+
+Because `/rs1` is a Hazel detail, not a FastQC detail, the bind goes in the profile, not the process:
+
 ```groovy
-   process fastqc {
-       container '/usr/local/usrapps/brc/brc_modules/images/quay.io_biocontainers_fastqc:0.12.1--hdfd78af_0.sif'
-       containerOptions '--bind /rs1:/rs1'                   // this line
-       ...
-   }
+apptainer {
+    enabled    = true
+    autoMounts = true
+    runOptions = '--bind /rs1:/rs1'
+}
 ```
+
+The process itself only names its image:
+
+```groovy
+process fastqc {
+    container '/usr/local/usrapps/brc/brc_modules/images/quay.io_biocontainers_fastqc:0.12.1--hdfd78af_0.sif'
+    ...
+}
+```
+
+::: {.callout-tip collapse="true"}
+## Why single quotes on `runOptions`?
+The quote style decides **who** expands `${...}`, and **when**.
+
+**Single quotes are literal text.** Groovy doesn't interpret anything inside them, so `'--bind ${TMPDIR:-/tmp}'` is kept exactly as typed. Nextflow copies that text into the job script (`.command.run`). When the job starts on the compute node, **bash** expands `${TMPDIR:-/tmp}`: "use `$TMPDIR`, or `/tmp` if it's unset."
+
+**Double quotes are Groovy interpolation.** In `"..."`, Groovy treats every `${...}` as Groovy code and fills it in **when the config is read**. That happens once, on the node where you ran `nextflow run`, before any job exists. `"--bind ${TMPDIR:-/tmp}"` breaks in two ways:
+
+1. `TMPDIR:-/tmp` is bash syntax, not Groovy, so the config fails to parse.
+2. Even the Groovy version, `"--bind ${System.getenv('TMPDIR')}"`, binds the wrong directory. It captures the launch node's `$TMPDIR`, but SLURM gives each job its own `$TMPDIR` on the compute node.
+
+Compare `cacheDir`, a few lines up, which uses double quotes on purpose. Nextflow uses that directory itself on the launch node, so reading the environment once at launch is exactly right.
+:::
 
 4. **Symlinked inputs can fail silently inside the container.** (We did this on Day 1 and it **works on our modules too**). Nextflow normally stages inputs into `work/` as symlinks pointing back to the original files — fine for a native process, but a container can't follow a symlink that points *outside* its mounted paths, even with the right binds in place. The fix is `stageInMode`, which forces Nextflow to copy the file into `work/` instead of symlinking it:
 ```groovy
@@ -872,23 +898,23 @@ You already used `profiles {}` in §4.3 to turn a container engine on without to
 ```groovy
 // nextflow.config
 profiles {
-    slurm {
+    hazel {
         process.executor = 'slurm'
         process.cpus      = 2
-        process.memory    = '4 GB'
-        process.time      = '1h'
+        process.memory    = 4.GB
+        process.time      = 1.h
     }
 }
 ```
 
-Run with `-profile slurm,apptainer` to combine both — profiles stack, so your container settings from §4 and your scheduler settings here apply together without redefining anything.
+You could have created two profiles, one with the resource information and one with the apptainer information and run nextflow with `nextflow run main.nf -profile hazel,apptainer...` to combine both — profiles stack, so your container settings from §4 and your scheduler settings here apply together without redefining anything.
 
 
 ## 5.3 Submitting: interactive session vs. `sbatch`-wrapped
 
 There are two ways to launch `nextflow run` itself, and they're not the same thing as the SLURM jobs Nextflow submits *for* your tasks (§5.1) — this trips people up, so it's worth being explicit:
 
-- **From an interactive session** (the same `srun` session from Day 1, §2 — same flags, no need to redo that here): you type `nextflow run main.nf -profile slurm` directly. Nextflow's own head process runs live in your terminal, submitting each task as a separate SLURM job as the pipeline progresses. Good for development and debugging — you see output immediately, `-resume` is easy to reach for.
+- **From an interactive session** (the same `srun` session from Day 1, §2 — same flags, no need to redo that here): you type `nextflow run main.nf -profile hazel` directly. Nextflow's own head process runs live in your terminal, submitting each task as a separate SLURM job as the pipeline progresses. Good for development and debugging — you see output immediately, `-resume` is easy to reach for.
 - **Wrapped in an `sbatch` script**: you submit the *head process itself* as a SLURM job, and it runs unattended:
 ```bash
   #!/bin/bash
@@ -898,7 +924,7 @@ There are two ways to launch `nextflow run` itself, and they're not the same thi
   #SBATCH --mem=2G
 
   module load apptainer nextflow
-  nextflow run main.nf -profile slurm,apptainer -resume
+  nextflow run main.nf -profile hazel -resume
 ```
   Good for anything long enough to outlast your terminal connection — the head process survives even if you log off, and each task it launches is still its own independent SLURM job.
 
@@ -911,57 +937,57 @@ The head process itself only needs to stay alive and track state — it's not do
 
 FastQC is light. Assembly is not. Requesting the same CPUs/memory for both wastes allocation on the light step and starves the heavy one. `withName` (or `withLabel`, if you've tagged processes with labels) lets you set resources per process instead of one blanket default.
 
-**Your 1st task:** add a `withName` block for your assembly process that requests more CPUs and memory than FastQC's defaults, then re-run with `-profile slurm` and confirm in the SLURM job log (`sacct -j <jobid>`) that the assembly task actually requested the resources you gave it.
+**Your 1st task:** add a `withName` block for your assembly process that requests more CPUs and memory than FastQC's defaults, then re-run with `-profile hazel` and confirm in the HAZEL job log (`sacct -j <jobid>`) that the assembly task actually requested the resources you gave it.
 
 ::: {.callout-tip collapse="true"}
 # Solution 1
 ```groovy
 // nextflow.config
 process {
-    withName: 'FASTQC' {
+    withName: 'fastqc' {
         cpus   = 1
-        memory = '2 GB'
+        memory = 2.GB
     }
     withName: 'assembly' {
         cpus   = 8
-        memory = '32 GB'
-        time   = '2h'
+        memory = 32.GB
+        time   = 2.h
     }
 }
 ```
 ::: {.callout-note}
 ### Defaults vs. overrides: how `process.cpus` and `withName` interact
 
-The `process.cpus = 2` / `process.memory = '4 GB'` lines you wrote in §5.2 aren't a separate setting from the `withName` blocks — they're the **default** every process gets unless something more specific overrides it. Nextflow always prefers the most specific match: a `withName` block for a given process wins over the profile-wide default.
+The `process.cpus = 2` / `process.memory = 4.GB` lines you wrote in §5.2 aren't a separate setting from the `withName` blocks — they're the **default** every process gets unless something more specific overrides it. Nextflow always prefers the most specific match: a `withName` block for a given process wins over the profile-wide default.
 
-So in the config above: `FASTQC` explicitly gets `cpus = 1, memory = '2 GB'` from its own `withName` block, `assembly` explicitly gets `cpus = 8, memory = '32 GB'`, and any *other* process in your pipeline without a `withName` entry falls back to the `process.cpus = 2, process.memory = '4 GB'` default. Nothing is added together or averaged — the more specific rule simply replaces the general one for that process.
+So in the config above: `FASTQC` explicitly gets `cpus = 1, memory = 2.GB` from its own `withName` block, `assembly` explicitly gets `cpus = 8, memory = 32.GB`, and any *other* process in your pipeline without a `withName` entry falls back to the `process.cpus = 2, process.memory = 4.GB` default. Nothing is added together or averaged — the more specific rule simply replaces the general one for that process.
 :::
 ::: 
 
 
-**Your 2nd task:** inside the `slurm` profile you wrote in §5.2, add a `withName` block for your assembly process that requests more CPUs and memory than FastQC's defaults, then re-run with `-profile slurm` and confirm in the SLURM job log (`sacct -j <jobid>`) that the assembly task actually requested the resources you gave it.
+**Your 2nd task:** inside the `hazel` profile you wrote in §5.2, add a `withName` block for your assembly process that requests more CPUs and memory than FastQC's defaults, then re-run with `-profile hazel` and confirm in the SLURM job log (`sacct -j <jobid>`) that the assembly task actually requested the resources you gave it.
 
 ::: {.callout-tip collapse="true"}
 # Solution 2
 ```groovy
 // nextflow.config
 profiles {
-    slurm {
+    hazel {
         process.executor = 'slurm'
         process.queue     = 'normal'
         process.cpus      = 2
-        process.memory    = '4 GB'
-        process.time      = '1h'
+        process.memory    = 4.GB
+        process.time      = 1.h
 
         process {
-            withName: 'FASTQC' {
+            withName: 'fastqc' {
                 cpus   = 1
-                memory = '2 GB'
+                memory = 2.GB
             }
             withName: 'assembly' {
                 cpus   = 8
-                memory = '32 GB'
-                time   = '2h'
+                memory = 32.GB
+                time   = 2.h
             }
         }
     }
@@ -969,11 +995,11 @@ profiles {
 ```
 
 ::: {.callout-note}
-### Why `withName` lives inside the `slurm` profile, not outside it
+### Why `withName` lives inside the `hazel` profile, not outside it
 
 You could technically put a `withName` block at the top level of `nextflow.config`, outside `profiles {}` entirely — but then it applies to **every** run, regardless of `-profile`. That means a local, non-SLURM run would still try to hand `assembly` 8 CPUs and 32 GB, even though nothing about `queue` or `executor` would apply outside the profile. You'd end up with SLURM-shaped resource requests running on your laptop or login node.
 
-Nesting `withName` inside `profiles { slurm { ... } }` scopes it correctly: these per-process resource rules only take effect when you actually run with `-profile slurm`. Anything SLURM-specific — resource sizing included — belongs inside the profile that turns SLURM on.
+Nesting `withName` inside `profiles { hazel { ... } }` scopes it correctly: these per-process resource rules only take effect when you actually run with `-profile hazel`. Anything SLURM-specific — resource sizing included — belongs inside the profile that turns SLURM on.
 :::
 :::
 
@@ -987,8 +1013,8 @@ This is where everything today comes together. You're extending the pipeline you
 1. **Write the `megahit` process**, taking `trim.out` as input:
 ```groovy
    process megahit {
-       container '/usr/local/usrapps/brc/brc_modules/images/CONTAINER!!!!! FIXXX'
-       publishDir 'results/assembly', mode: 'copy'
+       container '/usr/local/usrapps/brc/brc_modules/images/CONTAINER!!!!! FIXXX'  //TODO: ADD CONTAINER
+       publishDir "${params.outdir}/assembly", mode: 'copy'
 
        input:
        path reads
@@ -1004,6 +1030,12 @@ This is where everything today comes together. You're extending the pipeline you
 ```
 2. **Add it to your workflow block**, same chaining pattern from Day 1 §1 (`.out` from one process feeds the next):
 ```groovy
+    // pipeline.nf
+    include { trim } from './modules/trim.nf'
+    include { fastqc as fastqc_raw     } from './modules/fastqc.nf'
+    include { fastqc as fastqc_trimmed } from './modules/fastqc.nf'
+    include { megahit } from './modules/megahit.nf'
+
    workflow {
        main:
        reads_ch = Channel.fromPath('/gpfs_backup/bioinfo_data/training_data/nextflow_crash_course/sample_*_*.fastq.gz')
@@ -1015,20 +1047,16 @@ This is where everything today comes together. You're extending the pipeline you
    }
 ```
 3. **Confirm the container path is correct** for your account (§4.2.1–4.4) — this is the most common place to get stuck.
-4. **Run locally first**, no SLURM yet:
+4. **Run on the `hazel` profile**:
 ```bash
-   nextflow run main.nf -profile apptainer
+   nextflow run main.nf -profile hazel
 ```
-5. **Switch to the `slurm` profile** once the local run succeeds:
-```bash
-   nextflow run main.nf -profile slurm,apptainer
-```
-6. **Give `assembly` its own resource block** (you should already have done this in 5.5) in the `slurm` profile (§5.5) — assembly is memory-hungry, more so than `fastqc` or `trim`:
+6. **Give `assembly` its own resource block** (you should already have done this in 5.5) in the `hazel` profile (§5.5) — assembly is memory-hungry, more so than `fastqc` or `trim`:
 ```groovy
    withName: 'assembly' {
        cpus   = 8
-       memory = '32 GB'
-       time   = '2h'
+       memory = 32.GB
+       time   = 2.h
    }
 ```
 
@@ -1043,7 +1071,7 @@ If you finish early: add a process, `multiqc`, that gathers every FastQC and Tri
 ```groovy
 process multiqc {
     container '/usr/local/usrapps/brc/brc_modules/images/quay.io_biocontainers_multiqc:1.21--pyhdfd78af_0.sif'
-    publishDir 'results/multiqc', mode: 'copy'
+    publishDir "${params.outdir}/multiqc", mode: 'copy'
 
     input:
     path reports
@@ -1113,7 +1141,7 @@ Then, extract only the reads that *didn't* align. `samtools view -f 4` filters f
 process extract_unaligned {
     container '/usr/local/usrapps/brc/brc_modules/images/quay.io_biocontainers_samtools:1.19--h50ea8bc_0.sif'
     stageInMode 'copy'
-    publishDir 'results/host_removed', mode: 'copy'
+    publishDir "${params.outdir}/host_removed", mode: 'copy'
 
     input:
     path sam
