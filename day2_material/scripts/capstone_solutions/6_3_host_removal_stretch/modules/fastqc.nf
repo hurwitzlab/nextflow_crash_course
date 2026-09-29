@@ -1,7 +1,7 @@
 // modules/fastqc.nf
 
 process fastqc {
-    module 'fastqc/0.12.1'
+    container '/usr/local/usrapps/brc/brc_modules/images/quay.io_biocontainers_fastqc:0.12.1--hdfd78af_0.sif'
     stageInMode 'copy'
     // A directive that depends on an input value (qc_stage) has to be a
     // closure, not a plain interpolated string — otherwise qc_stage isn't in

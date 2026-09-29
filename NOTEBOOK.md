@@ -55,3 +55,33 @@ Entry format:
 - Result: `day1_material/` is back to its original committed state (no diff vs. `HEAD`);
   `day2_material/` still has the HPC-path changes from earlier today, now narratively
   consistent with Day 1 using the toy set.
+
+## 2026-09-29
+- Built out `day2_material/scripts/capstone_solutions/`, a new directory of worked solutions
+  for the Day 2 §6 Capstone: `6_1_guided/` (the required fastqc → trim → fastqc → megahit
+  pipeline, containerized, SLURM-ready), `6_2_multiqc_stretch/` (adds a `multiqc` process
+  combining fastqc + trim outputs via `.mix()`/`.collect()`), and
+  `6_3_host_removal_stretch/` (adds BWA `align_host` + SAMtools `extract_unaligned`,
+  rewiring assembly to run on host-filtered reads). Each is a self-contained pipeline
+  following the existing `main.nf` + `modules/` + `nextflow.config` + `submit_hazel.sh`
+  convention used elsewhere in `scripts/`.
+- The workshop doc never hands out a trimmomatic container path (only fastqc/megahit/
+  multiqc/bwa/samtools get one); left it as a flagged placeholder initially, then filled in
+  the real image (`quay.io_biocontainers_trimmomatic:0.40--hdfd78af_0.sif`) once provided.
+- While testing locally against Nextflow 26.04, found a real bug (not just a repo-specific
+  slip): `publishDir "${params.outdir}/${qc_stage}"` fails at runtime with `No such variable:
+  qc_stage` — a directive that depends on a process input must be wrapped in a closure
+  (`publishDir { "${params.outdir}/${qc_stage}" }, mode: 'copy'`), since directives are
+  evaluated before per-task input values exist. This exact pattern was already present (and
+  broken) in the pre-existing `day2_material/scripts/stretch_task_modules/modules/fastqc.nf`
+  and in the §3 stretch-task solution in `day2_pipeline2production.qmd`. Fixed all of it: the
+  three new capstone_solutions `fastqc.nf` modules, the existing `stretch_task_modules`
+  script, and the `.qmd` code block (plus added a callout there explaining why).
+- Verified every fix by running each pipeline locally with `-profile local`/`hazel` against
+  the Day 1 toy fastq data — all get cleanly through channel wiring and process scheduling,
+  failing only where expected outside Hazel (missing local `fastqc`/`trimmomatic` binaries,
+  missing `sbatch`), confirming the DSL and the qc_stage fix are both correct.
+- Next step: decide whether to commit these changes (three prior commits already exist on
+  this branch since the last entry — `initialized`, `fixed publishdir var`, `simplified first
+  profile`, `fixes and added capstone scripts` — today's work is still uncommitted on top of
+  those).

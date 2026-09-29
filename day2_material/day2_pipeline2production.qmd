@@ -680,7 +680,7 @@ process fastqc {
 
     module 'fastqc/0.12.1'
     stageInMode 'copy'
-    publishDir "${params.outdir}/${qc_stage}", mode: 'copy'
+    publishDir { "${params.outdir}/${qc_stage}" }, mode: 'copy'
 
     input:
     val qc_stage
@@ -712,6 +712,14 @@ workflow {
 ```
 
 Notice that `qc_stage` is declared with the val qualifier (`val qc_stage`) rather than path — this tells Nextflow it's a plain value (a string), not a file to be staged into the task's working directory. Since fastqc now expects two inputs positionally (label, then reads), each call supplies both: `Channel.value('qc_raw')` wraps a single string so it lines up as a channel item, just like reads_ch does for the file input.
+
+::: {.callout-important}
+### `publishDir` has to be a closure here
+
+`publishDir "${params.outdir}/${qc_stage}"` looks like the same double-quoted interpolation from earlier (§2.1.1) — but this time it fails at runtime with `No such variable: qc_stage`. Directives are evaluated once, when Nextflow parses the process definition, before any input value exists. A plain interpolated string can only see things that already exist at that point (like `params.outdir`), not a per-task input like `qc_stage`.
+
+The fix is to wrap the value in a closure — `publishDir { "${params.outdir}/${qc_stage}" }` — so Nextflow defers evaluating it until the task actually runs, once `qc_stage` has a real value. Any directive that depends on an input needs this same closure treatment, not just `publishDir`.
+:::
 
 > Note. This is genuinely one module now doing the job that took two separate process definitions on Day 1 — no duplicated process body, and each call still gets its own labeled output folder. The trade-off: the process signature is slightly less obvious at a glance (two positional inputs instead of one), which is exactly why this was left as a stretch task rather than the default path through this section.
 :::
@@ -773,7 +781,7 @@ apptainer {
 Adding a container to a process looks like this:
 
 ```groovy
-process FASTQC {
+process fastqc {
     container '/usr/local/usrapps/brc/brc_modules/images/quay.io_biocontainers_fastqc:0.12.1--hdfd78af_0.sif'
 
     input:
@@ -830,10 +838,12 @@ Requirements for this to work:
 Because `/rs1` is a Hazel detail, not a FastQC detail, the bind goes in the profile, not the process:
 
 ```groovy
-apptainer {
-    enabled    = true
-    autoMounts = true
-    runOptions = '--bind /rs1:/rs1'
+profiles {
+    apptainer {
+        enabled    = true
+        autoMounts = true
+        runOptions = '--bind /rs1:/rs1'
+    }
 }
 ```
 
@@ -862,7 +872,7 @@ Compare `cacheDir`, a few lines up, which uses double quotes on purpose. Nextflo
 
 4. **Symlinked inputs can fail silently inside the container.** (We did this on Day 1 and it **works on our modules too**). Nextflow normally stages inputs into `work/` as symlinks pointing back to the original files — fine for a native process, but a container can't follow a symlink that points *outside* its mounted paths, even with the right binds in place. The fix is `stageInMode`, which forces Nextflow to copy the file into `work/` instead of symlinking it:
 ```groovy
-   process FASTQC {
+   process fastqc {
        container '/usr/local/usrapps/brc/brc_modules/images/quay.io_biocontainers_fastqc:0.12.1--hdfd78af_0.sif'
        stageInMode 'copy'                   // this line
        ...
@@ -960,7 +970,7 @@ process {
 
 The `process.cpus = 2` / `process.memory = 4.GB` lines you wrote in §5.2 aren't a separate setting from the `withName` blocks — they're the **default** every process gets unless something more specific overrides it. Nextflow always prefers the most specific match: a `withName` block for a given process wins over the profile-wide default.
 
-So in the config above: `FASTQC` explicitly gets `cpus = 1, memory = 2.GB` from its own `withName` block, `assembly` explicitly gets `cpus = 8, memory = 32.GB`, and any *other* process in your pipeline without a `withName` entry falls back to the `process.cpus = 2, process.memory = 4.GB` default. Nothing is added together or averaged — the more specific rule simply replaces the general one for that process.
+So in the config above: `fastqc` explicitly gets `cpus = 1, memory = 2.GB` from its own `withName` block, `assembly` explicitly gets `cpus = 8, memory = 32.GB`, and any *other* process in your pipeline without a `withName` entry falls back to the `process.cpus = 2, process.memory = 4.GB` default. Nothing is added together or averaged — the more specific rule simply replaces the general one for that process.
 :::
 ::: 
 
@@ -1003,9 +1013,63 @@ Nesting `withName` inside `profiles { hazel { ... } }` scopes it correctly: thes
 :::
 :::
 
+
+### Putting it together: one profile for Hazel
+
+You now have two profiles that only make sense together on Hazel:
+`apptainer` (from §4) tells Nextflow *how to run each tool*, and `hazel`
+(from this section) tells it *where to run each task*. On Hazel you always
+want both, so combine them into one profile:
+
+```groovy
+profiles {
+
+    local {
+        process.executor = 'local'
+    }
+
+    hazel {
+        // --- where tasks run (§5) ---
+        process.executor = 'slurm'
+        // keep the rest of your §5 SLURM settings here
+
+        // --- how tools run (§4) ---
+        apptainer.enabled    = true
+        apptainer.autoMounts = true
+        apptainer.runOptions = '--bind /rs1:/rs1'
+    }
+}
+```
+
+Delete the standalone `apptainer` profile. From here on, every Hazel run is:
+
+```bash
+module load apptainer
+nextflow run main.nf -profile hazel
+```
+
+The rule of thumb: **one profile per place you run**, not one profile per
+feature. Your command stays short, and you can't forget half the setup.
+
+::: {.callout-note collapse="true"}
+## Alternative: stacking profiles
+
+Nextflow also lets you combine profiles at runtime with a comma:
+
+```bash
+nextflow run main.nf -profile slurm,apptainer
+```
+
+Profiles are applied left to right. If two profiles set the same option,
+the one listed later wins. Stacking is useful when features vary
+independently, for example the same cluster with or without containers.
+For this workshop, one `hazel` profile is simpler.
+:::
+
+
 # 6. Capstone: Assemble Your Reads
 
-This is where everything today comes together. You're extending the pipeline you already have — `fastqc → trim → fastqc(trimmed)` — with a 4th step: de novo assembly with MEGAHIT. When you're done, you'll have a real, if small, pipeline: FASTQC → trim → FASTQC → assemble, containerized, running on SLURM.
+This is where everything today comes together. You're extending the pipeline you already have — `fastqc → trim → fastqc(trimmed)` — with a 4th step: de novo assembly with MEGAHIT. When you're done, you'll have a real, if small, pipeline: fastqc → trim → fastqc → assemble, containerized, running on SLURM.
 
 
 ## 6.1 Guided steps
@@ -1013,7 +1077,7 @@ This is where everything today comes together. You're extending the pipeline you
 1. **Write the `megahit` process**, taking `trim.out` as input:
 ```groovy
    process megahit {
-       container '/usr/local/usrapps/brc/brc_modules/images/CONTAINER!!!!! FIXXX'  //TODO: ADD CONTAINER
+       container '/usr/local/usrapps/brc/brc_modules/images/quay.io_biocontainers_megahit:1.2.9--h8b12597_0.sif
        publishDir "${params.outdir}/assembly", mode: 'copy'
 
        input:

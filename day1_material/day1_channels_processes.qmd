@@ -49,7 +49,7 @@ By the end of this session, you will have:
 - learned how to keep paired-end files grouped together with
   `Channel.fromFilePairs`, and how to inspect and reshape channel contents
   with `.view()` and `.map()`
-- **chained** two processes together (Trimmomatic → FASTQC) so the output of
+- **chained** two processes together (Trimmomatic → fastqc) so the output of
   one becomes the input of the next, and extended that into a 3-step
   pipeline (raw QC → trim → post-trim QC)
 
@@ -121,9 +121,9 @@ cd /path/to/cloned/repo/day1_material
 
 ---
 
-# Hello FASTQC: Your First Process
+# Hello FastQC: Your First Process
 
-## 1. Warmup: run FASTQC on one sample directly
+## 1. Warmup: run FastQC on one sample directly
 
 ```bash
 # if you are using the NCSU HPC and you haven't done this already, run: 
@@ -149,7 +149,7 @@ Let's now run it with nextflow.
 
 ## 2. Examine the nextflow script and run it
 You are provided a fully functional, minimalist workflow script named
-`fastqc_example.nf` that does the same thing as before (run FASTQC on one sample)
+`fastqc_example.nf` that does the same thing as before (run fastqc on one sample)
 but with Nextflow.
 
 ### 2.1. Examine the code
@@ -166,7 +166,7 @@ nano scripts/fastqc_example.nf
 #!/usr/bin/env nextflow
 
 /*
- * Run FASTQC
+ * Run fastqc
  */
 process fastqc {
 
@@ -193,7 +193,7 @@ workflow {
     reads_ch = Channel.fromPath('data/sample_001_1.fastq')
     
 
-    // run FASTQC
+    // run fastqc
     fastqc(reads_ch)
 }
 ```
@@ -446,7 +446,7 @@ already done — on Day 2.
 Try the following on your own, using the `fastqc_example.nf` script as a
 starting point:
 
-Change the process so it runs FASTQC on a **different** file in `data/`
+Change the process so it runs fastqc on a **different** file in `data/`
 instead of `sample_001_R1.fastq`.
 
 Run your modified script with:
@@ -463,7 +463,7 @@ Take a few minutes to try this yourself before checking the solution below.
 #!/usr/bin/env nextflow
 
 /*
- * Run FASTQC
+ * Run fastqc
  */
 process fastqc {
 
@@ -489,7 +489,7 @@ workflow {
     // channel: grab a different fastq file
     reads_ch = Channel.fromPath('data/sample_002_R1.fastq')
 
-    // run FASTQC
+    // run fastqc
     fastqc(reads_ch)
 }
 ```
@@ -922,7 +922,7 @@ independent branches right now, not a chain.
 :::
 
 
-## 3. Exercise: add a third step — FASTQC on trimmed reads
+## 3. Exercise: add a third step — fastqc on trimmed reads
 
 Now let's make this a genuine 3-step **linear** pipeline by adding a check on
 the *trimmed* reads: does trimming actually improve quality?
