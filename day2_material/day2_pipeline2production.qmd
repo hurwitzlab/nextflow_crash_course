@@ -32,10 +32,6 @@ execute:
 ---
 # 1. Setting up
 
-```bash
-cd path/to/workshop/repo/day2_material
-```
-
 
 # 2. Making your nextflow workflow configurable
 

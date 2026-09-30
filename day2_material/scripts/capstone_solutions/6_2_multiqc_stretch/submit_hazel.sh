@@ -8,10 +8,6 @@
 
 set -euo pipefail
 
-# Run from wherever this script lives, so nextflow.config next to main.nf is
-# picked up correctly no matter where `sbatch` was called from.
-cd "$(dirname "$0")"
-
 # --- ENV ---
 # BRC-provided software modules (nextflow, apptainer, etc.) live under this path
 module use /usr/local/usrapps/brc/brc_modules/modules

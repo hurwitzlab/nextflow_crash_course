@@ -7,10 +7,7 @@
 #SBATCH --mem=2G
 
 set -euo pipefail
-
-# Run from wherever this script lives, so nextflow.config next to main.nf is
-# picked up correctly no matter where `sbatch` was called from.
-cd "$(dirname "$0")"
+echo "Running in: $PWD" #to make sure we are running on the right place
 
 # --- ENV ---
 # BRC-provided software modules (nextflow, apptainer, etc.) live under this path
