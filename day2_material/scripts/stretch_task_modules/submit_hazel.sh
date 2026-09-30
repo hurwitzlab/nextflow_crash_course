@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=fastqc_trimmomatic_params
+#SBATCH --job-name=stretch_task_modules
 #SBATCH --output=nf-head-%j.out
 #SBATCH --error=nf-head-%j.err
 #SBATCH --time=04:00:00
