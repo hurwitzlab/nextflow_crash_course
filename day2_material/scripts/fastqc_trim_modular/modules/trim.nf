@@ -2,7 +2,7 @@
 
 process trim {
 
-    module 'trimmomatic/0.39'
+    module 'trimmomatic/0.40'
     stageInMode 'copy'
     publishDir "${params.outdir}/trimmed", mode: 'copy'
 
