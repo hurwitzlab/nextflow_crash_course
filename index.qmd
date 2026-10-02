@@ -1,44 +1,87 @@
 ---
 title: "From ‘Hello Nextflow’ to Your First Pipeline"
+subtitle: "A hands-on Nextflow DSL2 crash course for HPC users"
 author:
-  - name: "María Touceda-Suárez & Seth Weaver"
+  - name: "Mery Touceda-Suárez"
     affiliations:
-      - name: "Bioinformatics Research Center"
+      - name: "Bioinformatics Research Center, NC State University"
         url: "https://brc.ncsu.edu/"
-date: today
+  - name: "Seth Weaver"
+    affiliations:
+      - name: "Bioinformatics Research Center, NC State University"
+        url: "https://brc.ncsu.edu/"
+title-block-banner: true
 format:
   html:
-    theme: cosmo
     toc: false
     number-sections: false
-    code-copy: true
 ---
 
-Welcome to the Nextflow Crash Course — a series of hands-on workshops introducing pipeline development and execution with [Nextflow](https://www.nextflow.io/).
+Welcome to the Nextflow Crash Course, a series of hands-on workshops introducing pipeline development and execution with [Nextflow](https://www.nextflow.io/).
 
-**This course is intended for...**
+## Who this course is for
 
-## Day 0: Prerequisites for Nextflow Workshop (Optional, self-paced)
+You're comfortable on the command line and have written a bash script or two, but Nextflow is new to you. By the end of the workshop, you'll have built a modular, multi-step DSL2 pipeline and run it on the Hazel cluster using SLURM and Apptainer containers.
 
-To get the most out of this Nextflow workshop, please familiarize yourself with the following topics and complete the associated material if necessary:
+## Course at a glance
 
-### [Nextflow workshop prerequisites (NCSU / Hazel HPC)](day0_material/00_prerequisites.qmd)
+::::::::: {.grid}
 
-### [Nextflow workshop prerequisites (Non-NCSU attendees)](day0_material/00b_prerequisites_non_ncsu.qmd)
+:::::: {.g-col-12 .g-col-md-4}
+::::: {.card .h-100}
+:::: {.card-body}
+#### Day 0 · Prerequisites
 
+*Self-paced, before the workshop*
 
-## Day 1 and 2: Workshop
+Get set up on Hazel: logging in, navigating the filesystem, loading BRC modules, submitting SLURM jobs, and using Git on the cluster.
 
-### [Day 1: Foundations: Thinking in Channels and Processes](day1_material/day1_channels_processes.qmd)
-### [Day 2: From Pipeline to Production](day2_material/day2_pipeline2production.qmd)
+[NCSU / Hazel setup →](day0_material/00_prerequisites.qmd)<br>
+[Non-NCSU setup →](day0_material/00b_prerequisites_non_ncsu.qmd)
+::::
+:::::
+::::::
 
+:::::: {.g-col-12 .g-col-md-4}
+::::: {.card .h-100}
+:::: {.card-body}
+#### Day 1 · Thinking in Channels and Processes
 
-## After the Workshop
+*Nextflow fundamentals*
 
-### [Next Steps & Extra Material](next_steps/next_steps.qmd)
+Your first process, building channels with channel factories and operators, and chaining processes into a FastQC + trimming workflow.
 
+[Start Day 1 →](day1_material/day1_channels_processes.qmd)
+::::
+:::::
+::::::
 
-## Additional Resources
+:::::: {.g-col-12 .g-col-md-4}
+::::: {.card .h-100}
+:::: {.card-body}
+#### Day 2 · From Pipeline to Production
 
-1. [COS Compute Handbook](https://hurwitzlab.github.io/COS_Compute_Handbook/)
-2. [Hazel Crash Course](https://hurwitzlab.github.io/hazel_crash_course/)
+*Config, modules, containers, and the cluster*
+
+Params, `nextflow.config`, and profiles; modular processes with `include`; Apptainer containers; SLURM execution; and a read-assembly capstone.
+
+[Start Day 2 →](day2_material/day2_pipeline2production.qmd)
+::::
+:::::
+::::::
+
+:::::::::
+
+::: {.callout-tip}
+## New to Hazel?
+Work through the Day 0 material before Day 1. The workshop assumes you can log in, load modules, and submit a SLURM job.
+:::
+
+## After the workshop
+
+[Next Steps & Extra Material](next_steps/next_steps.qmd) has where to go next, including nf-core and nf-test.
+
+## Additional resources
+
+- [COS Compute Handbook](https://hurwitzlab.github.io/COS_Compute_Handbook/): general computing guide for College of Sciences users
+- [Hazel Crash Course](https://hurwitzlab.github.io/hazel_crash_course/): deeper introduction to the Hazel cluster

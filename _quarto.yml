@@ -4,6 +4,8 @@ project:
 
 website:
   title: "Nextflow Crash Course"
+  site-url: https://hurwitzlab.github.io/nextflow_crash_course/
+  repo-url: https://github.com/hurwitzlab/nextflow_crash_course
   navbar:
     left:
       - href: index.qmd
@@ -37,3 +39,16 @@ website:
         text: "Day 2"
       - href: next_steps/next_steps.qmd
         text: Next Steps
+    right:
+      - icon: github
+        href: https://github.com/hurwitzlab/nextflow_crash_course
+        aria-label: GitHub repository
+  page-footer:
+    left: "Bioinformatics Research Center · NC State University"
+    right: "Built with [Quarto](https://quarto.org/)"
+
+format:
+  html:
+    theme: cosmo
+    code-copy: true
+    code-overflow: wrap

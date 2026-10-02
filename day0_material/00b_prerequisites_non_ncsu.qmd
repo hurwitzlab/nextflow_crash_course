@@ -1,7 +1,7 @@
 ---
 title: "Prerequisites (Non-NCSU Attendees)"
 author:
-  - name: "María (Mery) Touceda-Suárez"
+  - name: "Mery Touceda-Suárez"
     affiliations:
       - name: "Bioinformatics Research Center"
         url: "https://brc.ncsu.edu/"

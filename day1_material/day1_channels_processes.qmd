@@ -2,7 +2,7 @@
 title: "Day 1. Foundations: Thinking in Channels and Processes"
 subtitle: "Inspired in Hello Nextflow by Seqera"
 author:
-  - name: "María (Mery) Touceda-Suárez"
+  - name: "Mery Touceda-Suárez"
     affiliations:
       - name: "Bioinformatics Research Center"
         url: "https://brc.ncsu.edu/"
