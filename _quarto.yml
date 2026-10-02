@@ -8,3 +8,32 @@ website:
     left:
       - href: index.qmd
         text: Home
+      - text: "Day 0: Prerequisites"
+        menu:
+          - href: day0_material/00_prerequisites.qmd
+            text: Prerequisites (NCSU / Hazel)
+          - href: day0_material/00b_prerequisites_non_ncsu.qmd
+            text: Prerequisites (Non-NCSU)
+          - text: "---"
+          - href: day0_material/getting_started.qmd
+            text: Getting Started on Hazel
+          - href: day0_material/tour_of_hazel.qmd
+            text: Tour of Hazel
+          - href: day0_material/loading_brc_modules.qmd
+            text: Loading BRC Modules
+          - href: day0_material/running_jobs.qmd
+            text: Running Jobs with SLURM
+          - href: day0_material/github_on_hazel.qmd
+            text: Git and GitHub on Hazel
+          - href: day0_material/nf_core_pipelines.qmd
+            text: nf-core Pipelines
+      - text: "Day 1"
+        menu:
+          - href: day1_material/day1_channels_processes.qmd
+            text: "Channels and Processes"
+          - href: day1_material/extra_material/one_process_multiple_uses.qmd
+            text: "Extra: Organizing QC Outputs by Stage"
+      - href: day2_material/day2_pipeline2production.qmd
+        text: "Day 2"
+      - href: next_steps/next_steps.qmd
+        text: Next Steps

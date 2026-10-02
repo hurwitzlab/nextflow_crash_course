@@ -33,6 +33,11 @@ To get the most out of this Nextflow workshop, please familiarize yourself with 
 ### [Day 2: From Pipeline to Production](day2_material/day2_pipeline2production.qmd)
 
 
+## After the Workshop
+
+### [Next Steps & Extra Material](next_steps/next_steps.qmd)
+
+
 ## Additional Resources
 
 1. [COS Compute Handbook](https://hurwitzlab.github.io/COS_Compute_Handbook/)

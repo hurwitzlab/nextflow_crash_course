@@ -36,6 +36,10 @@ Putting your pipeline to work in the SLURM HPC system:
 3. Hello Containers: Portability
 4. Running on SLURM
 
+**Next Steps & Extra Material:**
+
+Where to go after the workshop, including nf-core and nf-test.
+
 
 
 ## Provide Feedback!

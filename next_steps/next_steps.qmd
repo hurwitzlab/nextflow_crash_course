@@ -1,0 +1,39 @@
+---
+title: "Next Steps & Extra Material"
+author:
+  - name: "María (Mery) Touceda-Suárez"
+    affiliations:
+      - name: "Bioinformatics Research Center"
+        url: "https://brc.ncsu.edu/"
+date: today
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: false
+    code-copy: true
+    code-overflow: wrap
+---
+
+You've built your first pipeline. Here are some resources to keep going.
+
+## nf-core
+
+<!-- TODO: short description of nf-core -->
+
+- [nf-core website](https://nf-co.re/)
+- <!-- TODO: add link -->
+- <!-- TODO: add link -->
+
+## nf-test
+
+<!-- TODO: short description of nf-test -->
+
+- [nf-test documentation](https://www.nf-test.com/)
+- <!-- TODO: add link -->
+- <!-- TODO: add link -->
+
+## Other Resources
+
+- <!-- TODO: add link -->
