@@ -1,5 +1,7 @@
 #!/usr/bin/env nextflow
 
+// This pipeline will NOT work as we expect it to
+
 params.input      = '/gpfs_backup/bioinfo_data/training_data/nextflow_crash_course/sample_*_*.fastq.gz'
 params.outdir     = 'results'
 

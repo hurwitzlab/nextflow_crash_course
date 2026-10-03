@@ -35,6 +35,8 @@ website:
             text: "Channels and Processes"
           - href: day1_material/extra_material/one_process_multiple_uses.qmd
             text: "Extra: Organizing QC Outputs by Stage"
+          - href: day1_material/extra_material/why_stagein.qmd
+            text: "Extra: Why stageInMode 'copy'?"
       - href: day2_material/day2_pipeline2production.qmd
         text: "Day 2"
       - href: next_steps/next_steps.qmd

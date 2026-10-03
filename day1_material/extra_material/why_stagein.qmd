@@ -1,0 +1,206 @@
+---
+title: "Beyond the Workshop: Why `stageInMode 'copy'`?"
+author: "Mery Touceda-Suárez"
+format:
+  html:
+    toc: true
+    code-overflow: wrap
+---
+
+::: {.callout-note}
+## This section is optional
+
+In Day 1, every process carried a line we never really explained:
+`stageInMode 'copy'`. You don't need to understand it to finish the
+workshop — the line works as-is. This page is for anyone who wants to know
+what it does, why our processes needed it, and what the alternative is.
+:::
+
+## Recap: the line in question
+
+Every FastQC process in Day 1 looked something like this:
+
+```groovy
+process fastqc {
+
+    module 'fastqc/0.12.1'
+    stageInMode 'copy'
+    publishDir 'fastqc', mode: 'copy'
+
+    input:
+    path reads
+
+    output:
+    path "*_fastqc.{html,zip}"
+
+    script:
+    """
+    fastqc -t 4 ${reads}
+    """
+}
+```
+
+To see why `stageInMode 'copy'` is there, we need two pieces: how Nextflow
+gets input files into a task, and what the `fastqc/0.12.1` module actually
+is.
+
+## Piece 1: Nextflow stages inputs as symlinks
+
+Each task runs in its own hash-named folder inside `work/`. Before the
+script runs, Nextflow **stages** the task's inputs into that folder. By
+default it doesn't copy them — it creates a **symlink** (a shortcut)
+pointing back to the original file:
+
+```
+work/1e/a42796.../
+└── sample_001_R1.fastq -> /gpfs_common/.../day1_material/data/sample_001_R1.fastq
+```
+
+This is fast and costs no extra disk space, which matters when your inputs
+are tens of gigabytes. For most tools, a symlink is indistinguishable from
+the real file.
+
+## Piece 2: the BRC module is a container
+
+As we saw in [Loading BRC Modules](../../day0_material/loading_brc_modules.qmd),
+most BRC modules — including `fastqc/0.12.1` — are wrappers around an
+Apptainer container. When the task runs `fastqc`, it's really running
+FastQC inside a container, and a container can only see host directories
+that are **bound** into it. By default, that's:
+
+- your home directory (`$HOME`)
+- the directory you're in when the tool runs (`$PWD`)
+- `/tmp`, `/proc`, `/sys`, `/dev`
+
+Here's the catch: inside a Nextflow task, `$PWD` is the task's own folder
+(`work/1e/a42796.../`), **not** the directory you launched the pipeline
+from.
+
+## Putting the pieces together
+
+Inside the container, FastQC can see the task folder, so it can see the
+symlink. But the symlink points to `day1_material/data/`, which is outside
+the task folder and outside `$HOME` (we're working in scratch). That path
+doesn't exist inside the container, so the symlink is broken from FastQC's
+point of view:
+
+```
+Host sees:       sample_001_R1.fastq -> .../data/sample_001_R1.fastq   ✓ file exists
+Container sees:  sample_001_R1.fastq -> .../data/sample_001_R1.fastq   ✗ target not mounted
+```
+
+`stageInMode 'copy'` sidesteps the problem: Nextflow puts a real copy of
+the file in the task folder instead of a symlink, and the container can
+always see the task folder.
+
+::: {.callout-important}
+## The trade-off
+
+Copying works every time, but every task now duplicates its inputs on
+disk, and every copy takes time. With our small workshop FASTQs that's
+unnoticeable. With real sequencing data across dozens of samples and
+several pipeline steps, it adds up fast — and scratch space isn't
+unlimited.
+:::
+
+## Try it: break it, then fix it properly
+
+Make a test script, `scripts/stagein_test.nf`, with `stageInMode` removed:
+
+```groovy
+#!/usr/bin/env nextflow
+
+process fastqc {
+
+    module 'fastqc/0.12.1'
+    publishDir 'fastqc', mode: 'copy'
+
+    input:
+    path reads
+
+    output:
+    path "*_fastqc.{html,zip}"
+
+    script:
+    """
+    fastqc -t 4 ${reads}
+    """
+}
+
+workflow {
+
+    main:
+    reads_ch = Channel.fromPath('data/sample_001_R1.fastq')
+
+    fastqc(reads_ch)
+}
+```
+
+Run it from `day1_material/`:
+
+```bash
+nextflow run scripts/stagein_test.nf
+```
+
+It should fail. Nextflow will most likely report that the expected
+`*_fastqc.{html,zip}` outputs are missing. To see what FastQC itself said,
+go into the failed task's folder (the hash is printed in the error) and
+read its logs:
+
+```bash
+cd work/<hash>/
+cat .command.err .command.log
+ls -l
+```
+
+FastQC complains that the input doesn't exist or can't be read — even
+though `ls -l` shows it right there. That's the broken symlink.
+
+### The fix: bind the data location
+
+Instead of copying, make the original files visible to the container.
+This is the `APPTAINER_BINDPATH` variable from Day 0 — Apptainer applies it
+to every container call, including the ones hidden inside BRC module
+wrappers.
+
+First, check where your symlinks really point, from the failed task's
+folder:
+
+```bash
+readlink -f sample_001_R1.fastq
+```
+
+On Hazel, scratch paths like `/share/$GROUP` resolve to a different real
+path (something starting with `/gpfs_common/...`), and the symlinks
+Nextflow creates use that real path. Bind the real path, not the shortcut:
+
+```bash
+cd /path/to/cloned/repo/day1_material
+export APPTAINER_BINDPATH="$(readlink -f /share/$GROUP)"
+nextflow run scripts/stagein_test.nf
+```
+
+This time it should succeed — with symlinked inputs and no copies.
+
+::: {.callout-tip}
+## Still failing after setting the bind?
+
+Compare the `readlink -f` output from the task folder with the value of
+`$APPTAINER_BINDPATH`. The bind has to cover the start of the real target
+path. If they don't match, bind the prefix that `readlink -f` shows you.
+:::
+
+## Which should you use?
+
+Both are legitimate fixes. `stageInMode 'copy'` is a one-line change that
+works no matter where your data lives, which is why we used it during the
+workshop. Binding is the better habit for real work: no duplicated data,
+and one setting in your `~/.bashrc` fixes every BRC module at once.
+
+## Looking ahead to Day 2
+
+In Day 2, you'll stop relying on the module wrapper and give Nextflow the
+container image directly with the `container` directive. Once Nextflow
+knows it's running a container, it can set up the bind paths for your
+inputs itself, and you'll see how `stageInMode 'copy'` stops being
+necessary.
