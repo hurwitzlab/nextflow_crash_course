@@ -1,7 +1,7 @@
 // modules/multiqc.nf
 
 process multiqc {
-    container '/usr/local/usrapps/brc/brc_modules/images/quay.io_biocontainers_multiqc:1.21--pyhdfd78af_0.sif'
+    container '/usr/local/usrapps/brc/brc_modules/images/quay.io_biocontainers_multiqc:1.35--pyhdfd78af_0.sif'
     publishDir "${params.outdir}/multiqc", mode: 'copy'
 
     input:
