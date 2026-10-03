@@ -18,11 +18,6 @@ workflow {
     // channel; .collect() waits for every item across every sample before
     // emitting once, so multiqc runs a single time over everything instead
     // of once per file.
-    // Note: MultiQC actually parses tool *logs*, not raw fastq — trim.out
-    // here is the trimmed reads themselves, since trim.nf doesn't capture a
-    // separate trimmomatic log file. Mixing it in matches what the doc asks
-    // for; a real pipeline would additionally emit trim's stderr log and
-    // feed that in instead.
-    multiqc_input_ch = fastqc_raw.out.mix(fastqc_trimmed.out, trim.out).collect()
-    multiqc(multiqc_input_ch)
+    multiqc(fastqc_raw.out.collect())
+    multiqc(fastqc_trimmed.out.collect())
 }
