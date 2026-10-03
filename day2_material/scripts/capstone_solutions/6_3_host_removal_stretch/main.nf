@@ -16,7 +16,7 @@ include { megahit }                  from './modules/megahit.nf'
 workflow {
     main:
     reads_ch          = Channel.fromPath(params.input)
-    host_reference_ch = Channel.fromPath(params.host_reference)
+    host_reference_ch = Channel.fromPath(params.host_reference).value()
 
     fastqc_raw(Channel.value('qc_raw'), reads_ch)
     trim(reads_ch)

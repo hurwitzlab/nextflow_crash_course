@@ -1,7 +1,7 @@
 // modules/align_host.nf
 
 process align_host {
-    container '/usr/local/usrapps/brc/brc_modules/images/quay.io_biocontainers_bwa:0.7.17--hed695b0_7.sif'
+    container '/usr/local/usrapps/brc/brc_modules/images/quay.io_biocontainers_bwa:0.7.19--h577a1d6_0.sif'
     stageInMode 'copy'
 
     input:

@@ -14,8 +14,7 @@ workflow {
     fastqc_trimmed(Channel.value('qc_trimmed'), trim.out)
     megahit(trim.out)
 
-    // .mix() merges both fastqc calls' outputs and trim's output into one
-    // channel; .collect() waits for every item across every sample before
+    // .collect() waits for every item across every sample before
     // emitting once, so multiqc runs a single time over everything instead
     // of once per file.
     multiqc(fastqc_raw.out.collect())
