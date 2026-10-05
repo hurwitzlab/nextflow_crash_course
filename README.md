@@ -40,6 +40,9 @@ Putting your pipeline to work in the SLURM HPC system:
 
 Where to go after the workshop, including nf-core and nf-test.
 
+- [Beyond the Workshop: Other Ways to Organize QC Outputs by Stage](https://hurwitzlab.github.io/nextflow_crash_course/day1_material/extra_material/one_process_multiple_uses.html)
+- [Beyond the Workshop: Why `stageInMode 'copy'`?](https://hurwitzlab.github.io/nextflow_crash_course/day1_material/extra_material/why_stagein.html)
+
 
 
 ## Provide Feedback!

@@ -18,6 +18,13 @@ format:
 
 You've built your first pipeline. Here are some resources to keep going.
 
+## Extra Material
+
+Optional deep dives on topics from Day 1:
+
+- [Beyond the Workshop: Other Ways to Organize QC Outputs by Stage](../day1_material/extra_material/one_process_multiple_uses.qmd)
+- [Beyond the Workshop: Why `stageInMode 'copy'`?](../day1_material/extra_material/why_stagein.qmd)
+
 ## nf-core
 
 <!-- TODO: short description of nf-core -->
